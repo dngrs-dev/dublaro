@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dublaro"
+version = "0.1.0"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+keywords = [
+    "ai-dubbing",
+    "speech-to-text",
+    "text-to-speech",
+    "translation",
+    "voice-cloning",
+    "video",
+    "audio",
+]
+dependencies = [
+    "pydantic>=2.8",
+    "typer>=0.12",
+    "rich>=13.7"
+]
+
+[project.urls]
+Homepage = "https://github.com/dngrs-dev/dublaro"
+Repository = "https://github.com/dngrs-dev/dublaro"
+Issues = "https://github.com/dngrs-dev/dublaro/issues"
+
+[project.scripts]
+dublaro = "dublaro.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dublaro"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["dublaro", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "N", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
