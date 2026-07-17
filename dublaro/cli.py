@@ -5,7 +5,7 @@ import typer
 from rich.console import Console
 
 from dublaro import __version__
-from dublaro.adapters.asr import FakeAsrAdapter, TranscriptionOptions
+from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
@@ -44,6 +44,28 @@ def main(
     ] = False,
 ) -> None:
     pass
+
+
+def create_asr_adapter(
+    backend: str,
+    *,
+    model_size: str,
+    device: str,
+    compute_type: str,
+) -> AsrAdapter:
+    if backend == "fake":
+        return FakeAsrAdapter()
+
+    if backend == "faster-whisper":
+        from dublaro.adapters.asr.faster_whisper import FastWhisperAsrAdapter
+
+        return FastWhisperAsrAdapter(
+            model_size=model_size,
+            device=device,
+            compute_type=compute_type,
+        )
+
+    raise typer.BadParameter("ASR backend must be 'fake' or 'faster-whisper'.")
 
 
 @app.command("extract-audio")
@@ -135,9 +157,42 @@ def transcribe(
             help="Source language code, for example en, de, fr.",
         ),
     ] = None,
+    asr_backend: Annotated[
+        str,
+        typer.Option(
+            "--asr",
+            help="ASR backend: fake or faster-whisper.",
+        ),
+    ] = "fake",
+    model_size: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            help="faster-whisper model size, for example tiny, base, small, medium.",
+        ),
+    ] = "small",
+    device: Annotated[
+        str,
+        typer.Option(
+            "--device",
+            help="Inference device: cpu or cuda.",
+        ),
+    ] = "cpu",
+    compute_type: Annotated[
+        str,
+        typer.Option(
+            "--compute-type",
+            help="faster-whisper compute type, for example int8 or float16.",
+        ),
+    ] = "int8",
 ) -> None:
     """Transcribe an audio file into transcript JSON."""
-    adapter = FakeAsrAdapter()
+    adapter = create_asr_adapter(
+        asr_backend,
+        model_size=model_size,
+        device=device,
+        compute_type=compute_type,
+    )
     transcript_output = output_path or default_transcript_path(audio_path)
 
     try:
@@ -147,9 +202,10 @@ def transcribe(
             options=TranscriptionOptions(source_language=language),
         )
         saved_path = save_transcript(transcript, transcript_output)
-    except (FileNotFoundError, ValueError) as error:
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
     console.print(f"[green]Transcript saved:[/green] {saved_path}")
-    console.print("[yellow]Note:[/yellow] using fake ASR adapter for now.")
+    if asr_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
