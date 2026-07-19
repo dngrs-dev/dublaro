@@ -6,6 +6,7 @@ from rich.console import Console
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
+from dublaro.adapters.text_adapter import FakeTextAdapter, TextAdapter
 from dublaro.adapters.translation import (
     ArgosTranslationAdapter,
     FakeTranslationAdapter,
@@ -14,6 +15,10 @@ from dublaro.adapters.translation import (
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
+)
+from dublaro.pipeline.adapt_text import (
+    adapt_transcript_text,
+    default_adapted_transcript_path,
 )
 from dublaro.pipeline.transcribe import (
     default_transcript_path,
@@ -90,6 +95,13 @@ def create_translation_adapter(
         return ArgosTranslationAdapter(auto_install=auto_install)
 
     raise typer.BadParameter("Translation backend must be 'fake' or 'argos'.")
+
+
+def create_text_adapter(backend: str) -> TextAdapter:
+    if backend == "fake":
+        return FakeTextAdapter()
+
+    raise typer.BadParameter("Text adapter must be 'fake'.")
 
 
 @app.command("extract-audio")
@@ -310,3 +322,75 @@ def translate(
     console.print(f"[green]Translated transcript saved:[/green] {saved_path}")
     if translation_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
+
+
+@app.command("adapt-text")
+def adapt_text(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input translated transcript JSON file.",
+        ),
+    ],
+    output_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output adapted transcript JSON path.",
+        ),
+    ] = None,
+    target_language: Annotated[
+        str | None,
+        typer.Option(
+            "--to",
+            help="Override target language code.",
+        ),
+    ] = None,
+    source_language: Annotated[
+        str | None,
+        typer.Option(
+            "--from",
+            help="Override source language code.",
+        ),
+    ] = None,
+    text_adapter_backend: Annotated[
+        str,
+        typer.Option(
+            "--text-adapter",
+            help="Text adaptation backend: fake.",
+        ),
+    ] = "fake",
+    max_chars_per_second: Annotated[
+        float,
+        typer.Option(
+            "--max-chars-per-second",
+            help="Target maximum spoken text density.",
+        ),
+    ] = 16.0,
+) -> None:
+    """Adapt translated transcript text for dubbing."""
+    adapter = create_text_adapter(text_adapter_backend)
+    adapted_output = output_path or default_adapted_transcript_path(transcript_path)
+
+    try:
+        transcript = load_transcript(transcript_path)
+        adapted = adapt_transcript_text(
+            transcript,
+            adapter=adapter,
+            target_language=target_language,
+            source_language=source_language,
+            max_chars_per_second=max_chars_per_second,
+        )
+        saved_path = save_transcript(adapted, adapted_output)
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"[green]Adapted transcript saved:[/green] {saved_path}")
+    if text_adapter_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake text adapter.")
