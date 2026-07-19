@@ -6,7 +6,11 @@ from rich.console import Console
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
-from dublaro.adapters.translation import FakeTranslationAdapter, TranslationAdapter
+from dublaro.adapters.translation import (
+    ArgosTranslationAdapter,
+    FakeTranslationAdapter,
+    TranslationAdapter,
+)
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
@@ -74,11 +78,18 @@ def create_asr_adapter(
     raise typer.BadParameter("ASR backend must be 'fake' or 'faster-whisper'.")
 
 
-def create_translation_adapter(backend: str) -> TranslationAdapter:
+def create_translation_adapter(
+    backend: str,
+    *,
+    auto_install: bool = False,
+) -> TranslationAdapter:
     if backend == "fake":
         return FakeTranslationAdapter()
 
-    raise typer.BadParameter("Translation backend must be 'fake'.")
+    if backend == "argos":
+        return ArgosTranslationAdapter(auto_install=auto_install)
+
+    raise typer.BadParameter("Translation backend must be 'fake' or 'argos'.")
 
 
 @app.command("extract-audio")
@@ -262,12 +273,22 @@ def translate(
         str,
         typer.Option(
             "--translator",
-            help="Translation backend: fake.",
+            help="Translation backend: fake or argos.",
         ),
     ] = "fake",
+    install_package: Annotated[
+        bool,
+        typer.Option(
+            "--install-package",
+            help="Download and install the Argos language package if missing.",
+        ),
+    ] = False,
 ) -> None:
     """Translate transcript JSON into another language."""
-    adapter = create_translation_adapter(translation_backend)
+    adapter = create_translation_adapter(
+        translation_backend,
+        auto_install=install_package,
+    )
     translated_output = output_path or default_translated_transcript_path(
         transcript_path,
         target_language,
@@ -282,7 +303,7 @@ def translate(
             source_language=source_language,
         )
         saved_path = save_transcript(translated, translated_output)
-    except (FileNotFoundError, ValueError) as error:
+    except (FileNotFoundError, RuntimeError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
