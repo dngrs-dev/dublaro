@@ -12,6 +12,7 @@ from dublaro.adapters.translation import (
     FakeTranslationAdapter,
     TranslationAdapter,
 )
+from dublaro.adapters.tts import FakeTtsAdapter, TtsAdapter
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
@@ -19,6 +20,11 @@ from dublaro.audio.ffmpeg import (
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
     default_adapted_transcript_path,
+)
+from dublaro.pipeline.synthesize import (
+    default_speech_output_dir,
+    default_synthesized_transcript_path,
+    synthesize_transcript_speech,
 )
 from dublaro.pipeline.transcribe import (
     default_transcript_path,
@@ -102,6 +108,13 @@ def create_text_adapter(backend: str) -> TextAdapter:
         return FakeTextAdapter()
 
     raise typer.BadParameter("Text adapter must be 'fake'.")
+
+
+def create_tts_adapter(backend: str) -> TtsAdapter:
+    if backend == "fake":
+        return FakeTtsAdapter()
+
+    raise typer.BadParameter("TTS backend must be 'fake'.")
 
 
 @app.command("extract-audio")
@@ -394,3 +407,80 @@ def adapt_text(
     console.print(f"[green]Adapted transcript saved:[/green] {saved_path}")
     if text_adapter_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake text adapter.")
+
+
+@app.command("synthesize")
+def synthesize(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input adapted transcript JSON file.",
+        ),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Directory for generated speech segment audio files.",
+        ),
+    ] = None,
+    output_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output synthesized transcript JSON path.",
+        ),
+    ] = None,
+    language: Annotated[
+        str | None,
+        typer.Option(
+            "--language",
+            "-l",
+            help="Override speech synthesis language code.",
+        ),
+    ] = None,
+    tts_backend: Annotated[
+        str,
+        typer.Option(
+            "--tts",
+            help="TTS backend: fake.",
+        ),
+    ] = "fake",
+    sample_rate: Annotated[
+        int,
+        typer.Option(
+            "--sample-rate",
+            help="Generated audio sample rate.",
+        ),
+    ] = 24_000,
+) -> None:
+    """Generate speech audio files from transcript segments."""
+    adapter = create_tts_adapter(tts_backend)
+    speech_output_dir = output_dir or default_speech_output_dir(transcript_path)
+    synthesized_output = output_path or default_synthesized_transcript_path(
+        transcript_path
+    )
+
+    try:
+        transcript = load_transcript(transcript_path)
+        synthesized = synthesize_transcript_speech(
+            transcript,
+            adapter=adapter,
+            output_dir=speech_output_dir,
+            language=language,
+            sample_rate=sample_rate,
+        )
+        saved_path = save_transcript(synthesized, synthesized_output)
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"[green]Speech clips saved:[/green] {speech_output_dir}")
+    console.print(f"[green]Synthesized transcript saved:[/green] {saved_path}")
+    if tts_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake TTS adapter.")

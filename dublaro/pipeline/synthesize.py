@@ -59,6 +59,13 @@ def default_speech_output_dir(transcript_path: str | Path) -> Path:
     return transcript_file.with_name(f"{transcript_file.stem}.speech")
 
 
+def default_synthesized_transcript_path(transcript_path: str | Path) -> Path:
+    transcript_file = Path(transcript_path)
+    return transcript_file.with_name(
+        f"{transcript_file.stem}.synthesized{transcript_file.suffix}"
+    )
+
+
 def _segment_audio_filename(segment_id: str) -> str:
     safe_id = "".join(
         character if character.isalnum() or character in {"-", "_"} else "_"

@@ -4,6 +4,7 @@ from pathlib import Path
 from dublaro.adapters.tts import FakeTtsAdapter
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
+    default_synthesized_transcript_path,
     synthesize_transcript_speech,
 )
 from dublaro.schemas import Segment, Transcript
@@ -94,6 +95,12 @@ def test_synthesize_transcript_speech_skips_empty_segments(tmp_path: Path) -> No
 
     assert synthesized.segments[0].generated_audio_path is None
     assert list((tmp_path / "speech").iterdir()) == []
+
+
+def test_default_synthesized_transcript_path() -> None:
+    assert default_synthesized_transcript_path("lesson.pl.adapted.json") == Path(
+        "lesson.pl.adapted.synthesized.json"
+    )
 
 
 def test_default_speech_output_dir() -> None:
