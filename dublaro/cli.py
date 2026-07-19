@@ -25,6 +25,7 @@ from dublaro.pipeline.align import (
     build_speech_timeline,
     default_speech_timeline_path,
 )
+from dublaro.pipeline.dub import dub_video
 from dublaro.pipeline.export import (
     default_dubbed_video_path,
     export_dubbed_video,
@@ -610,3 +611,171 @@ def export_video(
         raise typer.Exit(code=1) from error
 
     console.print(f"[green]Dubbed video saved:[/green] {saved_path}")
+
+
+@app.command("dub")
+def dub(
+    video_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input video file.",
+        ),
+    ],
+    target_language: Annotated[
+        str,
+        typer.Option(
+            "--to",
+            help="Target language code.",
+        ),
+    ],
+    output_path: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output dubbed video path.",
+        ),
+    ],
+    source_language: Annotated[
+        str | None,
+        typer.Option(
+            "--from",
+            help="Source language code.",
+        ),
+    ] = None,
+    workspace_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--workspace",
+            help="Directory for intermediate artifacts.",
+        ),
+    ] = None,
+    asr_backend: Annotated[
+        str,
+        typer.Option(
+            "--asr",
+            help="ASR backend: fake or faster-whisper.",
+        ),
+    ] = "fake",
+    translation_backend: Annotated[
+        str,
+        typer.Option(
+            "--translator",
+            help="Translation backend: fake or argos.",
+        ),
+    ] = "fake",
+    text_adapter_backend: Annotated[
+        str,
+        typer.Option(
+            "--text-adapter",
+            help="Text adaptation backend: fake.",
+        ),
+    ] = "fake",
+    tts_backend: Annotated[
+        str,
+        typer.Option(
+            "--tts",
+            help="TTS backend: fake.",
+        ),
+    ] = "fake",
+    model_size: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            help="faster-whisper model size.",
+        ),
+    ] = "small",
+    device: Annotated[
+        str,
+        typer.Option(
+            "--device",
+            help="Inference device: cpu or cuda.",
+        ),
+    ] = "cpu",
+    compute_type: Annotated[
+        str,
+        typer.Option(
+            "--compute-type",
+            help="faster-whisper compute type.",
+        ),
+    ] = "int8",
+    install_package: Annotated[
+        bool,
+        typer.Option(
+            "--install-package",
+            help="Download and install translation package if missing.",
+        ),
+    ] = False,
+    asr_sample_rate: Annotated[
+        int,
+        typer.Option(
+            "--asr-sample-rate",
+            help="Audio sample rate used for ASR.",
+        ),
+    ] = 16_000,
+    speech_sample_rate: Annotated[
+        int,
+        typer.Option(
+            "--speech-sample-rate",
+            help="Generated speech sample rate.",
+        ),
+    ] = 24_000,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite",
+            help="Replace existing intermediate and output files.",
+        ),
+    ] = False,
+) -> None:
+    """Run the full dubbing pipeline."""
+    workspace = workspace_dir or Path(".dublaro") / video_path.stem
+
+    try:
+        artifacts = dub_video(
+            video_path,
+            output_path,
+            source_language=source_language,
+            target_language=target_language,
+            workspace_dir=workspace,
+            asr_adapter=create_asr_adapter(
+                asr_backend,
+                model_size=model_size,
+                device=device,
+                compute_type=compute_type,
+            ),
+            translation_adapter=create_translation_adapter(
+                translation_backend,
+                auto_install=install_package,
+            ),
+            text_adapter=create_text_adapter(text_adapter_backend),
+            tts_adapter=create_tts_adapter(tts_backend),
+            asr_sample_rate=asr_sample_rate,
+            speech_sample_rate=speech_sample_rate,
+            overwrite=overwrite,
+        )
+    except (
+        FFmpegError,
+        FileExistsError,
+        FileNotFoundError,
+        RuntimeError,
+        ValueError,
+    ) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
+    console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
+
+    if asr_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
+    if translation_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake translation adapter.")
+    if text_adapter_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake text adapter.")
+    if tts_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake TTS adapter.")

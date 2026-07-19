@@ -219,3 +219,7 @@ __marimo__/
 
 # Data files
 data/
+
+# Dublaro artifacts
+.dublaro/
+.dublaro_cache/

@@ -1,4 +1,5 @@
 from array import array
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -431,6 +432,92 @@ def test_export_video_command_writes_dubbed_video(
             "video_path": video_path,
             "speech_track_path": speech_track_path,
             "output_path": output_path,
+            "overwrite": True,
+        }
+    ]
+
+
+def test_dub_command_runs_full_pipeline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        *,
+        source_language: str | None,
+        target_language: str,
+        workspace_dir: Path,
+        asr_adapter: object,
+        translation_adapter: object,
+        text_adapter: object,
+        tts_adapter: object,
+        asr_sample_rate: int = 16_000,
+        speech_sample_rate: int = 24_000,
+        overwrite: bool = False,
+    ) -> FakeArtifacts:
+        calls.append(
+            {
+                "video_path": video_path,
+                "output_path": output_path,
+                "source_language": source_language,
+                "target_language": target_language,
+                "workspace_dir": workspace_dir,
+                "asr_sample_rate": asr_sample_rate,
+                "speech_sample_rate": speech_sample_rate,
+                "overwrite": overwrite,
+            }
+        )
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(dubbed_video_path=output_path, workspace_dir=workspace_dir)
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--from",
+            "en",
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--workspace",
+            str(workspace_dir),
+            "--asr-sample-rate",
+            "16000",
+            "--speech-sample-rate",
+            "24000",
+            "--overwrite",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_path.exists()
+    assert calls == [
+        {
+            "video_path": video_path,
+            "output_path": output_path,
+            "source_language": "en",
+            "target_language": "pl",
+            "workspace_dir": workspace_dir,
+            "asr_sample_rate": 16_000,
+            "speech_sample_rate": 24_000,
             "overwrite": True,
         }
     ]
