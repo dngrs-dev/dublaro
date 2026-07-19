@@ -96,3 +96,64 @@ def extract_audio_from_video(
     )
 
     return output_file
+
+
+def replace_video_audio(
+    video_path: str | Path,
+    audio_path: str | Path,
+    output_path: str | Path,
+    *,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    video_file = Path(video_path)
+    audio_file = Path(audio_path)
+    output_file = Path(output_path)
+
+    if not video_file.exists():
+        raise FileNotFoundError(f"Video file does not exist: {video_file}")
+
+    if not video_file.is_file():
+        raise ValueError(f"Video path is not a file: {video_file}")
+
+    if not audio_file.exists():
+        raise FileNotFoundError(f"Audio file does not exist: {audio_file}")
+
+    if not audio_file.is_file():
+        raise ValueError(f"Audio path is not a file: {audio_file}")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output file already exists: {output_file}. "
+            "Use overwrite=True to replace it."
+        )
+
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    run_ffmpeg(
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            overwrite_flag,
+            "-i",
+            video_file,
+            "-i",
+            audio_file,
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-shortest",
+            output_file,
+        ],
+        executable=executable,
+    )
+
+    return output_file

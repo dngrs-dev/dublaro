@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 from dublaro.audio import ffmpeg
-from dublaro.audio.ffmpeg import FFmpegError, extract_audio_from_video, run_ffmpeg
+from dublaro.audio.ffmpeg import (
+    FFmpegError,
+    extract_audio_from_video,
+    replace_video_audio,
+    run_ffmpeg,
+)
 
 
 def test_extract_audio_uses_expected_ffmpeg_arguments(
@@ -98,3 +103,61 @@ def test_run_ffmpeg_raises_when_process_fails(
 
     with pytest.raises(FFmpegError, match="bad input"):
         run_ffmpeg(["-version"])
+
+
+def test_replace_video_audio_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "speech.wav"
+    output_path = tmp_path / "dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+    audio_path.write_bytes(b"fake audio")
+
+    calls: list[list[str | Path]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = replace_video_audio(video_path, audio_path, output_path)
+
+    assert result == output_path
+
+    args = calls[0]
+
+    assert "-i" in args
+    assert video_path in args
+    assert audio_path in args
+    assert "-map" in args
+    assert "0:v:0" in args
+    assert "1:a:0" in args
+    assert "-c:v" in args
+    assert "copy" in args
+    assert "-c:a" in args
+    assert "aac" in args
+    assert "-shortest" in args
+    assert output_path in args
+
+
+def test_replace_video_audio_rejects_existing_output_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "speech.wav"
+    output_path = tmp_path / "dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+    audio_path.write_bytes(b"fake audio")
+    output_path.write_bytes(b"existing output")
+
+    with pytest.raises(FileExistsError):
+        replace_video_audio(video_path, audio_path, output_path)
