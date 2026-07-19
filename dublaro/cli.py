@@ -6,14 +6,20 @@ from rich.console import Console
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
+from dublaro.adapters.translation import FakeTranslationAdapter, TranslationAdapter
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
 )
 from dublaro.pipeline.transcribe import (
     default_transcript_path,
+    load_transcript,
     save_transcript,
     transcribe_audio,
+)
+from dublaro.pipeline.translate import (
+    default_translated_transcript_path,
+    translate_transcript,
 )
 
 app = typer.Typer(
@@ -66,6 +72,13 @@ def create_asr_adapter(
         )
 
     raise typer.BadParameter("ASR backend must be 'fake' or 'faster-whisper'.")
+
+
+def create_translation_adapter(backend: str) -> TranslationAdapter:
+    if backend == "fake":
+        return FakeTranslationAdapter()
+
+    raise typer.BadParameter("Translation backend must be 'fake'.")
 
 
 @app.command("extract-audio")
@@ -209,3 +222,70 @@ def transcribe(
     console.print(f"[green]Transcript saved:[/green] {saved_path}")
     if asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
+
+
+@app.command("translate")
+def translate(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input transcript JSON file.",
+        ),
+    ],
+    target_language: Annotated[
+        str,
+        typer.Option(
+            "--to",
+            help="Target language code, for example pl, uk, es.",
+        ),
+    ],
+    output_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Output translated transcript JSON path.",
+        ),
+    ] = None,
+    source_language: Annotated[
+        str | None,
+        typer.Option(
+            "--from",
+            help="Override source language code.",
+        ),
+    ] = None,
+    translation_backend: Annotated[
+        str,
+        typer.Option(
+            "--translator",
+            help="Translation backend: fake.",
+        ),
+    ] = "fake",
+) -> None:
+    """Translate transcript JSON into another language."""
+    adapter = create_translation_adapter(translation_backend)
+    translated_output = output_path or default_translated_transcript_path(
+        transcript_path,
+        target_language,
+    )
+
+    try:
+        transcript = load_transcript(transcript_path)
+        translated = translate_transcript(
+            transcript,
+            adapter=adapter,
+            target_language=target_language,
+            source_language=source_language,
+        )
+        saved_path = save_transcript(translated, translated_output)
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"[green]Translated transcript saved:[/green] {saved_path}")
+    if translation_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake translation adapter.")

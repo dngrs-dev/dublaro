@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 from dublaro import cli
-from dublaro.pipeline.transcribe import load_transcript
+from dublaro.pipeline.transcribe import load_transcript, save_transcript
+from dublaro.schemas import Segment, Transcript
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -126,3 +127,44 @@ def test_transcribe_command_writes_transcript(tmp_path: Path) -> None:
     assert transcript.source_language == "en"
     assert transcript.segments[0].source_text == "This is a placeholder transcript."
     assert transcript.metadata["adapter"] == "fake-asr"
+
+
+def test_translate_command_writes_translated_transcript(tmp_path: Path) -> None:
+    transcript_path = tmp_path / "audio.en.json"
+    output_path = tmp_path / "audio.pl.json"
+    save_transcript(
+        Transcript(
+            id="audio",
+            source_language="en",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    source_text="Hello world",
+                )
+            ],
+        ),
+        transcript_path,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "translate",
+            str(transcript_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_path.exists()
+
+    transcript = load_transcript(output_path)
+
+    assert transcript.target_language == "pl"
+    assert transcript.segments[0].translated_text == "[pl] Hello world"
+    assert transcript.metadata["translation_adapter"] == "fake-translation"

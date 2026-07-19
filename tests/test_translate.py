@@ -1,5 +1,10 @@
+from pathlib import Path
+
 from dublaro.adapters.translation import FakeTranslationAdapter
-from dublaro.pipeline.translate import translate_transcript
+from dublaro.pipeline.translate import (
+    default_translated_transcript_path,
+    translate_transcript,
+)
 from dublaro.schemas import Segment, Transcript
 
 
@@ -79,3 +84,9 @@ def test_translate_transcript_keeps_empty_text_empty() -> None:
     )
 
     assert translated.segments[0].translated_text == ""
+
+
+def test_default_translated_transcript_path() -> None:
+    assert default_translated_transcript_path("audio.en.json", "pl") == Path(
+        "audio.en.pl.json"
+    )

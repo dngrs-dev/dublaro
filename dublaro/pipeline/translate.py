@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from dublaro.adapters.translation.base import TranslationAdapter, TranslationOptions
 from dublaro.schemas import Transcript
 
@@ -34,3 +36,13 @@ def translate_transcript(
         )
 
     return translated
+
+
+def default_translated_transcript_path(
+    transcript_path: str | Path,
+    target_language: str,
+) -> Path:
+    transcript_file = Path(transcript_path)
+    return transcript_file.with_name(
+        f"{transcript_file.stem}.{target_language}{transcript_file.suffix}"
+    )
