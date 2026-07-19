@@ -5,6 +5,8 @@ import pytest
 from dublaro.audio import ffmpeg
 from dublaro.audio.ffmpeg import (
     FFmpegError,
+    build_atempo_filter,
+    change_audio_tempo,
     extract_audio_from_video,
     replace_video_audio,
     run_ffmpeg,
@@ -161,3 +163,54 @@ def test_replace_video_audio_rejects_existing_output_without_overwrite(
 
     with pytest.raises(FileExistsError):
         replace_video_audio(video_path, audio_path, output_path)
+
+
+def test_build_atempo_filter_chains_large_tempo_factor() -> None:
+    assert build_atempo_filter(2.5) == "atempo=2,atempo=1.25"
+
+
+def test_change_audio_tempo_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_audio = tmp_path / "speech.wav"
+    output_audio = tmp_path / "speech.fit.wav"
+    input_audio.write_bytes(b"fake wav")
+
+    calls: list[list[str | Path]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = change_audio_tempo(
+        input_audio,
+        output_audio,
+        tempo_factor=2.5,
+        sample_rate=22_050,
+        overwrite=True,
+    )
+
+    assert result == output_audio
+
+    args = calls[0]
+    assert "-filter:a" in args
+    assert "atempo=2,atempo=1.25" in args
+    assert "-ar" in args
+    assert "22050" in args
+    assert "pcm_s16le" in args
+    assert output_audio in args
+
+
+def test_change_audio_tempo_rejects_in_place_output(tmp_path: Path) -> None:
+    input_audio = tmp_path / "speech.wav"
+    input_audio.write_bytes(b"fake wav")
+
+    with pytest.raises(ValueError, match="in place"):
+        change_audio_tempo(input_audio, input_audio, tempo_factor=1.2)

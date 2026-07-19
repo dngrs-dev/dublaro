@@ -157,3 +157,80 @@ def replace_video_audio(
     )
 
     return output_file
+
+
+def change_audio_tempo(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    tempo_factor: float,
+    sample_rate: int | None = None,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    input_file = Path(input_path)
+    output_file = Path(output_path)
+
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input audio file does not exist: {input_file}")
+
+    if not input_file.is_file():
+        raise ValueError(f"Input audio path is not a file: {input_file}")
+
+    if tempo_factor <= 0:
+        raise ValueError("tempo_factor must be > 0")
+
+    if input_file.resolve() == output_file.resolve():
+        raise ValueError("Cannot change audio tempo in place.")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output file already exists: {output_file}. "
+            "Use overwrite=True to replace it."
+        )
+
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    args: list[str | Path] = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        overwrite_flag,
+        "-i",
+        input_file,
+        "-filter:a",
+        build_atempo_filter(tempo_factor),
+        "-ac",
+        "1",
+    ]
+
+    if sample_rate is not None:
+        args.extend(["-ar", str(sample_rate)])
+
+    args.extend(["-acodec", "pcm_s16le", output_file])
+
+    run_ffmpeg(args, executable=executable)
+
+    return output_file
+
+
+def build_atempo_filter(tempo_factor: float) -> str:
+    if tempo_factor <= 0:
+        raise ValueError("tempo_factor must be > 0")
+
+    factors: list[float] = []
+    remaining = tempo_factor
+
+    while remaining > 2.0:
+        factors.append(2.0)
+        remaining /= 2.0
+
+    while remaining < 0.5:
+        factors.append(0.5)
+        remaining /= 0.5
+
+    factors.append(remaining)
+
+    return ",".join(f"atempo={factor:.6g}" for factor in factors)
