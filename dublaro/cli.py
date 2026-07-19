@@ -12,7 +12,7 @@ from dublaro.adapters.translation import (
     FakeTranslationAdapter,
     TranslationAdapter,
 )
-from dublaro.adapters.tts import FakeTtsAdapter, TtsAdapter
+from dublaro.adapters.tts import FakeTtsAdapter, PiperTtsAdapter, TtsAdapter
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
@@ -119,11 +119,29 @@ def create_text_adapter(backend: str) -> TextAdapter:
     raise typer.BadParameter("Text adapter must be 'fake'.")
 
 
-def create_tts_adapter(backend: str) -> TtsAdapter:
+def create_tts_adapter(
+    backend: str,
+    *,
+    piper_model_path: Path | None = None,
+    piper_config_path: Path | None = None,
+    piper_executable: str = "piper",
+    piper_speaker: int | None = None,
+) -> TtsAdapter:
     if backend == "fake":
         return FakeTtsAdapter()
 
-    raise typer.BadParameter("TTS backend must be 'fake'.")
+    if backend == "piper":
+        if piper_model_path is None:
+            raise typer.BadParameter("--piper-model is required when --tts piper.")
+
+        return PiperTtsAdapter(
+            piper_model_path,
+            config_path=piper_config_path,
+            executable=piper_executable,
+            speaker=piper_speaker,
+        )
+
+    raise typer.BadParameter("TTS backend must be 'fake' or 'piper'.")
 
 
 @app.command("extract-audio")
@@ -467,9 +485,43 @@ def synthesize(
             help="Generated audio sample rate.",
         ),
     ] = 24_000,
+    piper_model_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--piper-model",
+            help="Path to Piper .onnx voice model.",
+        ),
+    ] = None,
+    piper_config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--piper-config",
+            help="Path to Piper .onnx.json voice config.",
+        ),
+    ] = None,
+    piper_executable: Annotated[
+        str,
+        typer.Option(
+            "--piper-executable",
+            help="Piper executable name or path.",
+        ),
+    ] = "piper",
+    piper_speaker: Annotated[
+        int | None,
+        typer.Option(
+            "--piper-speaker",
+            help="Piper speaker id for multi-speaker voices.",
+        ),
+    ] = None,
 ) -> None:
     """Generate speech audio files from transcript segments."""
-    adapter = create_tts_adapter(tts_backend)
+    adapter = create_tts_adapter(
+        tts_backend,
+        piper_model_path=piper_model_path,
+        piper_config_path=piper_config_path,
+        piper_executable=piper_executable,
+        piper_speaker=piper_speaker,
+    )
     speech_output_dir = output_dir or default_speech_output_dir(transcript_path)
     synthesized_output = output_path or default_synthesized_transcript_path(
         transcript_path
@@ -724,6 +776,34 @@ def dub(
             help="Generated speech sample rate.",
         ),
     ] = 24_000,
+    piper_model_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--piper-model",
+            help="Path to Piper .onnx voice model.",
+        ),
+    ] = None,
+    piper_config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--piper-config",
+            help="Path to Piper .onnx.json voice config.",
+        ),
+    ] = None,
+    piper_executable: Annotated[
+        str,
+        typer.Option(
+            "--piper-executable",
+            help="Piper executable name or path.",
+        ),
+    ] = "piper",
+    piper_speaker: Annotated[
+        int | None,
+        typer.Option(
+            "--piper-speaker",
+            help="Piper speaker id for multi-speaker voices.",
+        ),
+    ] = None,
     overwrite: Annotated[
         bool,
         typer.Option(
@@ -753,7 +833,13 @@ def dub(
                 auto_install=install_package,
             ),
             text_adapter=create_text_adapter(text_adapter_backend),
-            tts_adapter=create_tts_adapter(tts_backend),
+            tts_adapter=create_tts_adapter(
+                tts_backend,
+                piper_model_path=piper_model_path,
+                piper_config_path=piper_config_path,
+                piper_executable=piper_executable,
+                piper_speaker=piper_speaker,
+            ),
             asr_sample_rate=asr_sample_rate,
             speech_sample_rate=speech_sample_rate,
             overwrite=overwrite,

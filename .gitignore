@@ -223,3 +223,6 @@ data/
 # Dublaro artifacts
 .dublaro/
 .dublaro_cache/
+
+# Models
+models/
