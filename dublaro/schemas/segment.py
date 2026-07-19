@@ -8,7 +8,7 @@ class WordTiming(BaseModel):
     confidence: float | None = Field(ge=0, le=1, default=None)
 
     @model_validator(mode="after")
-    def valiedate_time_order(self):
+    def validate_word_time_order(self):
         if self.end < self.start:
             raise ValueError("word end must be >= start")
         return self
