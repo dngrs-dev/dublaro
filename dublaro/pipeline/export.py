@@ -9,12 +9,14 @@ def export_dubbed_video(
     output_path: str | Path,
     *,
     overwrite: bool = False,
+    executable: str = "ffmpeg",
 ) -> Path:
     return replace_video_audio(
         video_path,
         speech_track_path,
         output_path,
         overwrite=overwrite,
+        executable=executable,
     )
 
 

@@ -453,6 +453,7 @@ def test_dub_command_runs_full_pipeline(
     class FakeArtifacts:
         dubbed_video_path: Path
         workspace_dir: Path
+        fitted_transcript_path: Path | None = None
 
     def fake_dub_video(
         video_path: Path,
@@ -467,6 +468,10 @@ def test_dub_command_runs_full_pipeline(
         tts_adapter: object,
         asr_sample_rate: int = 16_000,
         speech_sample_rate: int = 24_000,
+        fit_speech: bool = False,
+        max_speech_speedup: float = 1.35,
+        min_speech_overrun_seconds: float = 0.05,
+        ffmpeg_executable: str = "ffmpeg",
         overwrite: bool = False,
     ) -> FakeArtifacts:
         calls.append(
@@ -478,6 +483,10 @@ def test_dub_command_runs_full_pipeline(
                 "workspace_dir": workspace_dir,
                 "asr_sample_rate": asr_sample_rate,
                 "speech_sample_rate": speech_sample_rate,
+                "fit_speech": fit_speech,
+                "max_speech_speedup": max_speech_speedup,
+                "min_speech_overrun_seconds": min_speech_overrun_seconds,
+                "ffmpeg_executable": ffmpeg_executable,
                 "overwrite": overwrite,
             }
         )
@@ -503,6 +512,13 @@ def test_dub_command_runs_full_pipeline(
             "16000",
             "--speech-sample-rate",
             "24000",
+            "--fit-speech",
+            "--max-speech-speedup",
+            "1.25",
+            "--min-speech-overrun",
+            "0.1",
+            "--ffmpeg",
+            "ffmpeg-test",
             "--overwrite",
         ],
     )
@@ -518,6 +534,10 @@ def test_dub_command_runs_full_pipeline(
             "workspace_dir": workspace_dir,
             "asr_sample_rate": 16_000,
             "speech_sample_rate": 24_000,
+            "fit_speech": True,
+            "max_speech_speedup": 1.25,
+            "min_speech_overrun_seconds": 0.1,
+            "ffmpeg_executable": "ffmpeg-test",
             "overwrite": True,
         }
     ]

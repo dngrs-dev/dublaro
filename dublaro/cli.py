@@ -968,6 +968,34 @@ def dub(
             help="Piper speaker id for multi-speaker voices.",
         ),
     ] = None,
+    fit_speech_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--fit-speech/--no-fit-speech",
+            help="Speed up overlong generated speech clips before alignment.",
+        ),
+    ] = False,
+    max_speech_speedup: Annotated[
+        float,
+        typer.Option(
+            "--max-speech-speedup",
+            help="Maximum allowed audio speedup factor when fitting speech.",
+        ),
+    ] = 1.35,
+    min_speech_overrun_seconds: Annotated[
+        float,
+        typer.Option(
+            "--min-speech-overrun",
+            help="Only fit clips longer than this tolerance.",
+        ),
+    ] = 0.05,
+    ffmpeg_executable: Annotated[
+        str,
+        typer.Option(
+            "--ffmpeg",
+            help="ffmpeg executable name or path.",
+        ),
+    ] = "ffmpeg",
     overwrite: Annotated[
         bool,
         typer.Option(
@@ -1006,6 +1034,10 @@ def dub(
             ),
             asr_sample_rate=asr_sample_rate,
             speech_sample_rate=speech_sample_rate,
+            fit_speech=fit_speech_enabled,
+            max_speech_speedup=max_speech_speedup,
+            min_speech_overrun_seconds=min_speech_overrun_seconds,
+            ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
         )
     except (
@@ -1020,6 +1052,10 @@ def dub(
 
     console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
     console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
+    if artifacts.fitted_transcript_path is not None:
+        console.print(
+            f"[green]Fitted transcript:[/green] {artifacts.fitted_transcript_path}"
+        )
 
     if asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")

@@ -9,6 +9,7 @@ from dublaro.audio.ffmpeg import extract_audio_from_video
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.export import export_dubbed_video
+from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
@@ -25,6 +26,8 @@ class DubbingArtifacts:
     speech_dir: Path
     speech_track_path: Path
     dubbed_video_path: Path
+    fitted_transcript_path: Path | None
+    fitted_speech_dir: Path | None
 
 
 def dub_video(
@@ -40,6 +43,10 @@ def dub_video(
     tts_adapter: TtsAdapter,
     asr_sample_rate: int = 16_000,
     speech_sample_rate: int = 24_000,
+    fit_speech: bool = False,
+    max_speech_speedup: float = 1.35,
+    min_speech_overrun_seconds: float = 0.05,
+    ffmpeg_executable: str = "ffmpeg",
     overwrite: bool = False,
 ) -> DubbingArtifacts:
     video_file = Path(video_path)
@@ -66,6 +73,7 @@ def dub_video(
         sample_rate=asr_sample_rate,
         channels=1,
         overwrite=overwrite,
+        executable=ffmpeg_executable,
     )
 
     source_transcript = transcribe_audio(
@@ -100,8 +108,26 @@ def dub_video(
     )
     save_transcript(synthesized_transcript, synthesized_transcript_path)
 
+    fitted_transcript_path: Path | None = None
+    fitted_speech_dir: Path | None = None
+    speech_timeline_transcript = synthesized_transcript
+
+    if fit_speech:
+        fitted_transcript_path = workspace / f"{stem}.{target_language}.fitted.json"
+        fitted_speech_dir = workspace / f"{stem}.{target_language}.fitted-speech"
+
+        speech_timeline_transcript = fit_generated_speech_to_segments(
+            synthesized_transcript,
+            output_dir=fitted_speech_dir,
+            max_speedup=max_speech_speedup,
+            min_overrun_seconds=min_speech_overrun_seconds,
+            overwrite=overwrite,
+            executable=ffmpeg_executable,
+        )
+        save_transcript(speech_timeline_transcript, fitted_transcript_path)
+
     speech_track_path = build_speech_timeline(
-        synthesized_transcript,
+        speech_timeline_transcript,
         output_path=speech_track_path,
         sample_rate=speech_sample_rate,
     )
@@ -111,6 +137,7 @@ def dub_video(
         speech_track_path,
         output_file,
         overwrite=overwrite,
+        executable=ffmpeg_executable,
     )
 
     return DubbingArtifacts(
@@ -123,4 +150,6 @@ def dub_video(
         speech_dir=speech_dir,
         speech_track_path=speech_track_path,
         dubbed_video_path=dubbed_video_path,
+        fitted_transcript_path=fitted_transcript_path,
+        fitted_speech_dir=fitted_speech_dir,
     )
