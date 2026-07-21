@@ -1138,6 +1138,48 @@ def dub(
             help="Only fit clips longer than this tolerance.",
         ),
     ] = 0.05,
+    mix_original_audio_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--mix-original-audio/--no-mix-original-audio",
+            help="Mix dubbed speech over lowered original audio.",
+        ),
+    ] = False,
+    original_audio_gain: Annotated[
+        float,
+        typer.Option(
+            "--original-audio-gain",
+            help="Original audio volume multiplier outside dubbed speech.",
+        ),
+    ] = 1.0,
+    ducking_gain: Annotated[
+        float,
+        typer.Option(
+            "--ducking-gain",
+            help="Original audio volume multiplier during dubbed speech.",
+        ),
+    ] = 0.25,
+    speech_gain: Annotated[
+        float,
+        typer.Option(
+            "--speech-gain",
+            help="Dubbed speech volume multiplier.",
+        ),
+    ] = 1.0,
+    ducking_margin_seconds: Annotated[
+        float,
+        typer.Option(
+            "--ducking-margin",
+            help="Extra ducking time before and after each speech segment.",
+        ),
+    ] = 0.05,
+    ducking_fade_seconds: Annotated[
+        float,
+        typer.Option(
+            "--ducking-fade",
+            help="Fade time for ducking transitions.",
+        ),
+    ] = 0.05,
     ffmpeg_executable: Annotated[
         str,
         typer.Option(
@@ -1186,6 +1228,12 @@ def dub(
             fit_speech=fit_speech_enabled,
             max_speech_speedup=max_speech_speedup,
             min_speech_overrun_seconds=min_speech_overrun_seconds,
+            mix_original_audio=mix_original_audio_enabled,
+            original_audio_gain=original_audio_gain,
+            ducking_gain=ducking_gain,
+            speech_gain=speech_gain,
+            ducking_margin_seconds=ducking_margin_seconds,
+            ducking_fade_seconds=ducking_fade_seconds,
             ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
         )
@@ -1205,6 +1253,8 @@ def dub(
         console.print(
             f"[green]Fitted transcript:[/green] {artifacts.fitted_transcript_path}"
         )
+    if artifacts.mixed_audio_path is not None:
+        console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
 
     if asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")

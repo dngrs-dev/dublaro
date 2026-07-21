@@ -93,6 +93,8 @@ def test_dub_video_runs_full_pipeline(
     assert artifacts.speech_track_path.exists()
     assert artifacts.fitted_transcript_path is None
     assert artifacts.fitted_speech_dir is None
+    assert artifacts.mix_original_audio_path is None
+    assert artifacts.mixed_audio_path is None
 
     translated = load_transcript(artifacts.translated_transcript_path)
     adapted = load_transcript(artifacts.adapted_transcript_path)
@@ -234,4 +236,175 @@ def test_dub_video_can_fit_speech_before_alignment(
             "executable": "ffmpeg-test",
         },
         {"step": "export", "executable": "ffmpeg-test"},
+    ]
+
+
+def test_dub_video_can_mix_original_audio_before_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+
+        calls.append(
+            {
+                "step": "extract",
+                "output_path": output_file,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "overwrite": overwrite,
+                "executable": executable,
+            }
+        )
+
+        return output_file
+
+    def fake_mix_original_audio_with_dubbed_speech(
+        transcript: Transcript,
+        *,
+        original_audio_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        original_gain: float = 1.0,
+        ducking_gain: float = 0.25,
+        speech_gain: float = 1.0,
+        ducking_margin_seconds: float = 0.05,
+        ducking_fade_seconds: float = 0.05,
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake mixed audio")
+
+        calls.append(
+            {
+                "step": "mix",
+                "original_audio_path": Path(original_audio_path),
+                "speech_track_path": Path(speech_track_path),
+                "output_path": output_file,
+                "original_gain": original_gain,
+                "ducking_gain": ducking_gain,
+                "speech_gain": speech_gain,
+                "ducking_margin_seconds": ducking_margin_seconds,
+                "ducking_fade_seconds": ducking_fade_seconds,
+            }
+        )
+
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+
+        calls.append(
+            {
+                "step": "export",
+                "speech_track_path": Path(speech_track_path),
+                "overwrite": overwrite,
+                "executable": executable,
+            }
+        )
+
+        return output_file
+
+    monkeypatch.setattr(
+        dub_module,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(
+        dub_module,
+        "mix_original_audio_with_dubbed_speech",
+        fake_mix_original_audio_with_dubbed_speech,
+    )
+    monkeypatch.setattr(
+        dub_module,
+        "export_dubbed_video",
+        fake_export_dubbed_video,
+    )
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        speech_sample_rate=8_000,
+        mix_original_audio=True,
+        original_audio_gain=0.8,
+        ducking_gain=0.2,
+        speech_gain=1.1,
+        ducking_margin_seconds=0.2,
+        ducking_fade_seconds=0.03,
+        ffmpeg_executable="ffmpeg-test",
+        overwrite=True,
+    )
+
+    assert (
+        artifacts.mix_original_audio_path == workspace_dir / "lesson.original-mix.wav"
+    )
+    assert artifacts.mixed_audio_path == workspace_dir / "lesson.pl.mixed.wav"
+    assert artifacts.dubbed_video_path == output_path
+
+    assert calls == [
+        {
+            "step": "extract",
+            "output_path": workspace_dir / "lesson.audio.wav",
+            "sample_rate": 16_000,
+            "channels": 1,
+            "overwrite": True,
+            "executable": "ffmpeg-test",
+        },
+        {
+            "step": "extract",
+            "output_path": workspace_dir / "lesson.original-mix.wav",
+            "sample_rate": 8_000,
+            "channels": 1,
+            "overwrite": True,
+            "executable": "ffmpeg-test",
+        },
+        {
+            "step": "mix",
+            "original_audio_path": workspace_dir / "lesson.original-mix.wav",
+            "speech_track_path": workspace_dir / "lesson.pl.speech-track.wav",
+            "output_path": workspace_dir / "lesson.pl.mixed.wav",
+            "original_gain": 0.8,
+            "ducking_gain": 0.2,
+            "speech_gain": 1.1,
+            "ducking_margin_seconds": 0.2,
+            "ducking_fade_seconds": 0.03,
+        },
+        {
+            "step": "export",
+            "speech_track_path": workspace_dir / "lesson.pl.mixed.wav",
+            "overwrite": True,
+            "executable": "ffmpeg-test",
+        },
     ]

@@ -556,6 +556,7 @@ def test_dub_command_runs_full_pipeline(
         dubbed_video_path: Path
         workspace_dir: Path
         fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
 
     def fake_dub_video(
         video_path: Path,
@@ -573,6 +574,12 @@ def test_dub_command_runs_full_pipeline(
         fit_speech: bool = False,
         max_speech_speedup: float = 1.35,
         min_speech_overrun_seconds: float = 0.05,
+        mix_original_audio: bool = False,
+        original_audio_gain: float = 1.0,
+        ducking_gain: float = 0.25,
+        speech_gain: float = 1.0,
+        ducking_margin_seconds: float = 0.05,
+        ducking_fade_seconds: float = 0.05,
         ffmpeg_executable: str = "ffmpeg",
         overwrite: bool = False,
     ) -> FakeArtifacts:
@@ -588,6 +595,12 @@ def test_dub_command_runs_full_pipeline(
                 "fit_speech": fit_speech,
                 "max_speech_speedup": max_speech_speedup,
                 "min_speech_overrun_seconds": min_speech_overrun_seconds,
+                "mix_original_audio": mix_original_audio,
+                "original_audio_gain": original_audio_gain,
+                "ducking_gain": ducking_gain,
+                "speech_gain": speech_gain,
+                "ducking_margin_seconds": ducking_margin_seconds,
+                "ducking_fade_seconds": ducking_fade_seconds,
                 "ffmpeg_executable": ffmpeg_executable,
                 "overwrite": overwrite,
             }
@@ -619,6 +632,17 @@ def test_dub_command_runs_full_pipeline(
             "1.25",
             "--min-speech-overrun",
             "0.1",
+            "--mix-original-audio",
+            "--original-audio-gain",
+            "0.8",
+            "--ducking-gain",
+            "0.2",
+            "--speech-gain",
+            "1.1",
+            "--ducking-margin",
+            "0.2",
+            "--ducking-fade",
+            "0.03",
             "--ffmpeg",
             "ffmpeg-test",
             "--overwrite",
@@ -639,6 +663,12 @@ def test_dub_command_runs_full_pipeline(
             "fit_speech": True,
             "max_speech_speedup": 1.25,
             "min_speech_overrun_seconds": 0.1,
+            "mix_original_audio": True,
+            "original_audio_gain": 0.8,
+            "ducking_gain": 0.2,
+            "speech_gain": 1.1,
+            "ducking_margin_seconds": 0.2,
+            "ducking_fade_seconds": 0.03,
             "ffmpeg_executable": "ffmpeg-test",
             "overwrite": True,
         }

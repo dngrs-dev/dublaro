@@ -10,6 +10,7 @@ from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
+from dublaro.pipeline.mix import mix_original_audio_with_dubbed_speech
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
@@ -28,6 +29,8 @@ class DubbingArtifacts:
     dubbed_video_path: Path
     fitted_transcript_path: Path | None
     fitted_speech_dir: Path | None
+    mix_original_audio_path: Path | None
+    mixed_audio_path: Path | None
 
 
 def dub_video(
@@ -46,6 +49,12 @@ def dub_video(
     fit_speech: bool = False,
     max_speech_speedup: float = 1.35,
     min_speech_overrun_seconds: float = 0.05,
+    mix_original_audio: bool = False,
+    original_audio_gain: float = 1.0,
+    ducking_gain: float = 0.25,
+    speech_gain: float = 1.0,
+    ducking_margin_seconds: float = 0.05,
+    ducking_fade_seconds: float = 0.05,
     ffmpeg_executable: str = "ffmpeg",
     overwrite: bool = False,
 ) -> DubbingArtifacts:
@@ -132,9 +141,40 @@ def dub_video(
         sample_rate=speech_sample_rate,
     )
 
+    audio_for_export_path = speech_track_path
+    mix_original_audio_path: Path | None = None
+    mixed_audio_path: Path | None = None
+
+    if mix_original_audio:
+        mix_original_audio_path = workspace / f"{stem}.original-mix.wav"
+        mixed_audio_path = workspace / f"{stem}.{target_language}.mixed.wav"
+
+        mix_original_audio_path = extract_audio_from_video(
+            video_file,
+            mix_original_audio_path,
+            sample_rate=speech_sample_rate,
+            channels=1,
+            overwrite=overwrite,
+            executable=ffmpeg_executable,
+        )
+
+        mixed_audio_path = mix_original_audio_with_dubbed_speech(
+            speech_timeline_transcript,
+            original_audio_path=mix_original_audio_path,
+            speech_track_path=speech_track_path,
+            output_path=mixed_audio_path,
+            original_gain=original_audio_gain,
+            ducking_gain=ducking_gain,
+            speech_gain=speech_gain,
+            ducking_margin_seconds=ducking_margin_seconds,
+            ducking_fade_seconds=ducking_fade_seconds,
+        )
+
+        audio_for_export_path = mixed_audio_path
+
     dubbed_video_path = export_dubbed_video(
         video_file,
-        speech_track_path,
+        audio_for_export_path,
         output_file,
         overwrite=overwrite,
         executable=ffmpeg_executable,
@@ -152,4 +192,6 @@ def dub_video(
         dubbed_video_path=dubbed_video_path,
         fitted_transcript_path=fitted_transcript_path,
         fitted_speech_dir=fitted_speech_dir,
+        mix_original_audio_path=mix_original_audio_path,
+        mixed_audio_path=mixed_audio_path,
     )
