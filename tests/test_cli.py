@@ -232,6 +232,56 @@ def test_translate_command_passes_translator_options(
     assert calls == [{"backend": "argos", "auto_install": True}]
 
 
+def test_preview_units_command_shows_grouped_segments(tmp_path: Path) -> None:
+    transcript_path = tmp_path / "audio.en.json"
+
+    save_transcript(
+        Transcript(
+            id="audio",
+            source_language="en",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    speaker="speaker-1",
+                    source_text="I think that",
+                ),
+                Segment(
+                    id="seg-0002",
+                    start=1.2,
+                    end=2.0,
+                    speaker="speaker-1",
+                    source_text="this matters.",
+                ),
+                Segment(
+                    id="seg-0003",
+                    start=3.0,
+                    end=4.0,
+                    speaker="speaker-1",
+                    source_text="Next point.",
+                ),
+            ],
+        ),
+        transcript_path,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "preview-units",
+            str(transcript_path),
+            "--max-group-pause",
+            "0.8",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Translation units" in result.output
+    assert "2 from 3 segments" in result.output
+    assert "Next point." in result.output
+
+
 def test_adapt_text_command_writes_adapted_transcript(tmp_path: Path) -> None:
     transcript_path = tmp_path / "audio.pl.json"
     output_path = tmp_path / "audio.pl.adapted.json"

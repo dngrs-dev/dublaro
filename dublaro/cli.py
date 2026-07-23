@@ -4,6 +4,7 @@ from typing import Annotated, cast
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
@@ -61,6 +62,7 @@ from dublaro.pipeline.translate import (
     default_translated_transcript_path,
     translate_transcript,
 )
+from dublaro.pipeline.units import group_segments_for_translation
 
 app = typer.Typer(
     name="dublaro",
@@ -416,6 +418,71 @@ def translate(
     console.print(f"[green]Translated transcript saved:[/green] {saved_path}")
     if translation_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
+
+
+@app.command("preview-units")
+def preview_units(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input source transcript JSON file.",
+        ),
+    ],
+    max_group_pause_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-pause",
+            help="Maximum pause between segments grouped for translation.",
+        ),
+    ] = 0.8,
+    max_group_duration_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-duration",
+            help="Maximum duration for one grouped translation unit.",
+        ),
+    ] = 12.0,
+) -> None:
+    """Preview how transcript segments will be grouped before translation."""
+    try:
+        transcript = load_transcript(transcript_path)
+        groups = group_segments_for_translation(
+            transcript,
+            max_pause_seconds=max_group_pause_seconds,
+            max_duration_seconds=max_group_duration_seconds,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(
+        "[green]Translation units:[/green] "
+        f"{len(groups)} from {len(transcript.segments)} segments"
+    )
+
+    table = Table(title="Translation Unit Preview")
+    table.add_column("Unit")
+    table.add_column("Segments")
+    table.add_column("Window")
+    table.add_column("Duration")
+    table.add_column("Speaker")
+    table.add_column("Source text", overflow="fold", ratio=3)
+
+    for group in groups:
+        table.add_row(
+            group.id,
+            ", ".join(segment.id for segment in group.segments),
+            f"{group.start:.2f}-{group.end:.2f}s",
+            f"{group.duration:.2f}s",
+            group.speaker or "",
+            Text(group.source_text),
+        )
+
+    console.print(table)
 
 
 @app.command("adapt-text")
