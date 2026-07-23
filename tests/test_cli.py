@@ -273,7 +273,7 @@ def test_adapt_text_command_writes_adapted_transcript(tmp_path: Path) -> None:
     transcript = load_transcript(output_path)
 
     assert transcript.segments[0].adapted_text == "Cześć świecie"
-    assert transcript.metadata["text_adapter"] == "fake-text-adapter"
+    assert transcript.metadata["text_adapter"] == "rules"
     assert transcript.metadata["text_adapter_max_chars_per_second"] == "14.0"
 
 
@@ -569,6 +569,9 @@ def test_dub_command_runs_full_pipeline(
         translation_adapter: object,
         text_adapter: object,
         tts_adapter: object,
+        translation_group_segments: bool = True,
+        max_translation_group_pause_seconds: float = 0.8,
+        max_translation_group_duration_seconds: float = 12.0,
         asr_sample_rate: int = 16_000,
         speech_sample_rate: int = 24_000,
         fit_speech: bool = False,
@@ -590,6 +593,9 @@ def test_dub_command_runs_full_pipeline(
                 "source_language": source_language,
                 "target_language": target_language,
                 "workspace_dir": workspace_dir,
+                "translation_group_segments": translation_group_segments,
+                "max_translation_group_pause_seconds": max_translation_group_pause_seconds,
+                "max_translation_group_duration_seconds": max_translation_group_duration_seconds,
                 "asr_sample_rate": asr_sample_rate,
                 "speech_sample_rate": speech_sample_rate,
                 "fit_speech": fit_speech,
@@ -658,6 +664,9 @@ def test_dub_command_runs_full_pipeline(
             "source_language": "en",
             "target_language": "pl",
             "workspace_dir": workspace_dir,
+            "translation_group_segments": True,
+            "max_translation_group_pause_seconds": 0.8,
+            "max_translation_group_duration_seconds": 12.0,
             "asr_sample_rate": 16_000,
             "speech_sample_rate": 24_000,
             "fit_speech": True,

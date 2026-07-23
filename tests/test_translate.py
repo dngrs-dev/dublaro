@@ -90,3 +90,59 @@ def test_default_translated_transcript_path() -> None:
     assert default_translated_transcript_path("audio.en.json", "pl") == Path(
         "audio.en.pl.json"
     )
+
+
+def test_translate_transcript_groups_segments_before_translation() -> None:
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=1.0,
+                speaker="a",
+                source_text="I think that",
+            ),
+            Segment(
+                id="seg-0002",
+                start=1.2,
+                end=2.0,
+                speaker="a",
+                source_text="this matters.",
+            ),
+        ],
+    )
+
+    translated = translate_transcript(
+        transcript,
+        adapter=FakeTranslationAdapter(),
+        target_language="pl",
+    )
+
+    assert len(translated.segments) == 1
+    assert translated.segments[0].id == "seg-0001_to_seg-0002"
+    assert translated.segments[0].source_text == "I think that this matters."
+    assert translated.segments[0].translated_text == "[pl] I think that this matters."
+
+
+def test_translate_transcript_can_keep_original_segments() -> None:
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        segments=[
+            Segment(id="seg-0001", start=0.0, end=1.0, source_text="Hello"),
+            Segment(id="seg-0002", start=1.2, end=2.0, source_text="world"),
+        ],
+    )
+
+    translated = translate_transcript(
+        transcript,
+        adapter=FakeTranslationAdapter(),
+        target_language="pl",
+        group_segments=False,
+    )
+
+    assert len(translated.segments) == 2
+    assert translated.segments[0].translated_text == "[pl] Hello"
+    assert translated.segments[1].translated_text == "[pl] world"

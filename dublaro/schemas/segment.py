@@ -30,6 +30,7 @@ class Segment(BaseModel):
     words: list[WordTiming] = Field(default_factory=list)
     confidence: float | None = Field(ge=0, le=1, default=None)
 
+    metadata: dict[str, str] = Field(default_factory=dict)
     generated_audio_path: str | None = None
 
     @property

@@ -55,6 +55,9 @@ def dub_video(
     speech_gain: float = 1.0,
     ducking_margin_seconds: float = 0.05,
     ducking_fade_seconds: float = 0.05,
+    translation_group_segments: bool = True,
+    max_translation_group_pause_seconds: float = 0.8,
+    max_translation_group_duration_seconds: float = 12.0,
     ffmpeg_executable: str = "ffmpeg",
     overwrite: bool = False,
 ) -> DubbingArtifacts:
@@ -97,6 +100,9 @@ def dub_video(
         adapter=translation_adapter,
         target_language=target_language,
         source_language=source_language,
+        group_segments=translation_group_segments,
+        max_group_pause_seconds=max_translation_group_pause_seconds,
+        max_group_duration_seconds=max_translation_group_duration_seconds,
     )
     save_transcript(translated_transcript, translated_transcript_path)
 

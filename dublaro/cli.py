@@ -7,7 +7,11 @@ from rich.table import Table
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
-from dublaro.adapters.text_adapter import FakeTextAdapter, TextAdapter
+from dublaro.adapters.text_adapter import (
+    FakeTextAdapter,
+    RuleBasedTextAdapter,
+    TextAdapter,
+)
 from dublaro.adapters.translation import (
     ArgosTranslationAdapter,
     FakeTranslationAdapter,
@@ -128,7 +132,10 @@ def create_text_adapter(backend: str) -> TextAdapter:
     if backend == "fake":
         return FakeTextAdapter()
 
-    raise typer.BadParameter("Text adapter must be 'fake'.")
+    if backend == "rules":
+        return RuleBasedTextAdapter()
+
+    raise typer.BadParameter("Text adapter must be 'fake' or 'rules'.")
 
 
 def create_tts_adapter(
@@ -347,6 +354,27 @@ def translate(
             help="Download and install the Argos language package if missing.",
         ),
     ] = False,
+    group_segments: Annotated[
+        bool,
+        typer.Option(
+            "--group-segments/--no-group-segments",
+            help="Translate nearby sentence fragments as one natural unit.",
+        ),
+    ] = True,
+    max_group_pause_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-pause",
+            help="Maximum pause between segments grouped for translation.",
+        ),
+    ] = 0.8,
+    max_group_duration_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-duration",
+            help="Maximum duration for one grouped translation unit.",
+        ),
+    ] = 12.0,
 ) -> None:
     """Translate transcript JSON into another language."""
     adapter = create_translation_adapter(
@@ -365,6 +393,9 @@ def translate(
             adapter=adapter,
             target_language=target_language,
             source_language=source_language,
+            group_segments=group_segments,
+            max_group_pause_seconds=max_group_pause_seconds,
+            max_group_duration_seconds=max_group_duration_seconds,
         )
         saved_path = save_transcript(translated, translated_output)
     except (FileNotFoundError, RuntimeError, ValueError) as error:
@@ -414,9 +445,9 @@ def adapt_text(
         str,
         typer.Option(
             "--text-adapter",
-            help="Text adaptation backend: fake.",
+            help="Text adaptation backend: fake or rules.",
         ),
-    ] = "fake",
+    ] = "rules",
     max_chars_per_second: Annotated[
         float,
         typer.Option(
@@ -1037,9 +1068,9 @@ def dub(
         str,
         typer.Option(
             "--text-adapter",
-            help="Text adaptation backend: fake.",
+            help="Text adaptation backend: fake or rules.",
         ),
-    ] = "fake",
+    ] = "rules",
     tts_backend: Annotated[
         str,
         typer.Option(
@@ -1075,6 +1106,27 @@ def dub(
             help="Download and install translation package if missing.",
         ),
     ] = False,
+    translation_group_segments: Annotated[
+        bool,
+        typer.Option(
+            "--group-segments/--no-group-segments",
+            help="Translate nearby sentence fragments as one natural unit.",
+        ),
+    ] = True,
+    max_translation_group_pause_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-pause",
+            help="Maximum pause between segments grouped for translation.",
+        ),
+    ] = 0.8,
+    max_translation_group_duration_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-group-duration",
+            help="Maximum duration for one grouped translation unit.",
+        ),
+    ] = 12.0,
     asr_sample_rate: Annotated[
         int,
         typer.Option(
@@ -1223,6 +1275,9 @@ def dub(
                 piper_executable=piper_executable,
                 piper_speaker=piper_speaker,
             ),
+            translation_group_segments=translation_group_segments,
+            max_translation_group_pause_seconds=max_translation_group_pause_seconds,
+            max_translation_group_duration_seconds=max_translation_group_duration_seconds,
             asr_sample_rate=asr_sample_rate,
             speech_sample_rate=speech_sample_rate,
             fit_speech=fit_speech_enabled,
