@@ -12,6 +12,7 @@ from dublaro.adapters.tts import TtsAdapter
 from dublaro.audio.ffmpeg import extract_audio_from_video
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
+from dublaro.pipeline.dub_plan import DubAdapters, DubOptions, DubPaths
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
 from dublaro.pipeline.manifest import (
@@ -140,31 +141,89 @@ def dub_video(
 ) -> DubbingArtifacts:
     started_at = datetime.now(UTC)
 
-    if manifest_output_path is not None and not write_manifest:
-        raise ValueError(
-            "manifest_output_path cannot be used when write_manifest is False."
-        )
+    paths = DubPaths.build(
+        video_path=video_path,
+        output_path=output_path,
+        workspace_dir=workspace_dir,
+    )
+    options = DubOptions(
+        source_language=source_language,
+        target_language=target_language,
+        asr_sample_rate=asr_sample_rate,
+        speech_sample_rate=speech_sample_rate,
+        fit_speech=fit_speech,
+        max_speech_speedup=max_speech_speedup,
+        min_speech_overrun_seconds=min_speech_overrun_seconds,
+        mix_original_audio=mix_original_audio,
+        original_audio_gain=original_audio_gain,
+        ducking_gain=ducking_gain,
+        speech_gain=speech_gain,
+        ducking_margin_seconds=ducking_margin_seconds,
+        ducking_fade_seconds=ducking_fade_seconds,
+        translation_group_segments=translation_group_segments,
+        max_translation_group_pause_seconds=max_translation_group_pause_seconds,
+        max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+        export_srt=export_srt,
+        srt_output_path=Path(srt_output_path) if srt_output_path is not None else None,
+        srt_text_mode=srt_text_mode,
+        write_manifest=write_manifest,
+        manifest_output_path=(
+            Path(manifest_output_path) if manifest_output_path is not None else None
+        ),
+        ffmpeg_executable=ffmpeg_executable,
+        resume=resume,
+        overwrite=overwrite,
+    )
+    adapters = DubAdapters(
+        asr=asr_adapter,
+        translation=translation_adapter,
+        text_adapter=text_adapter,
+        tts=tts_adapter,
+    )
+    artifact_paths = paths.artifacts(options)
 
-    if resume and overwrite:
-        raise ValueError("resume cannot be used with overwrite.")
-
-    video_file = Path(video_path)
-    output_file = Path(output_path)
-    workspace = Path(workspace_dir)
+    video_file = paths.video_path
+    output_file = paths.output_path
+    workspace = paths.workspace_dir
     workspace.mkdir(parents=True, exist_ok=True)
 
-    source_label = source_language or "auto"
-    stem = video_file.stem
-
-    extracted_audio_path = workspace / f"{stem}.audio.wav"
-    source_transcript_path = workspace / f"{stem}.{source_label}.json"
-    translated_transcript_path = workspace / f"{stem}.{target_language}.json"
-    adapted_transcript_path = workspace / f"{stem}.{target_language}.adapted.json"
-    synthesized_transcript_path = (
-        workspace / f"{stem}.{target_language}.synthesized.json"
+    source_language = options.source_language
+    target_language = options.target_language
+    asr_sample_rate = options.asr_sample_rate
+    speech_sample_rate = options.speech_sample_rate
+    fit_speech = options.fit_speech
+    max_speech_speedup = options.max_speech_speedup
+    min_speech_overrun_seconds = options.min_speech_overrun_seconds
+    mix_original_audio = options.mix_original_audio
+    original_audio_gain = options.original_audio_gain
+    ducking_gain = options.ducking_gain
+    speech_gain = options.speech_gain
+    ducking_margin_seconds = options.ducking_margin_seconds
+    ducking_fade_seconds = options.ducking_fade_seconds
+    translation_group_segments = options.translation_group_segments
+    max_translation_group_pause_seconds = options.max_translation_group_pause_seconds
+    max_translation_group_duration_seconds = (
+        options.max_translation_group_duration_seconds
     )
-    speech_dir = workspace / f"{stem}.{target_language}.speech"
-    speech_track_path = workspace / f"{stem}.{target_language}.speech-track.wav"
+    export_srt = options.export_srt
+    srt_text_mode = options.srt_text_mode
+    write_manifest = options.write_manifest
+    ffmpeg_executable = options.ffmpeg_executable
+    resume = options.resume
+    overwrite = options.overwrite
+
+    asr_adapter = adapters.asr
+    translation_adapter = adapters.translation
+    text_adapter = adapters.text_adapter
+    tts_adapter = adapters.tts
+
+    extracted_audio_path = artifact_paths.extracted_audio_path
+    source_transcript_path = artifact_paths.source_transcript_path
+    translated_transcript_path = artifact_paths.translated_transcript_path
+    adapted_transcript_path = artifact_paths.adapted_transcript_path
+    synthesized_transcript_path = artifact_paths.synthesized_transcript_path
+    speech_dir = artifact_paths.speech_dir
+    speech_track_path = artifact_paths.speech_track_path
 
     if resume and reusable_file(extracted_audio_path):
         _progress_skipped(
@@ -293,8 +352,8 @@ def dub_video(
     speech_timeline_transcript = synthesized_transcript
 
     if fit_speech:
-        fitted_transcript_path = workspace / f"{stem}.{target_language}.fitted.json"
-        fitted_speech_dir = workspace / f"{stem}.{target_language}.fitted-speech"
+        fitted_transcript_path = artifact_paths.fitted_transcript_path
+        fitted_speech_dir = artifact_paths.fitted_speech_dir
 
         reusable_fitted_transcript = (
             load_reusable_synthesized_transcript(fitted_transcript_path)
@@ -348,8 +407,8 @@ def dub_video(
     mixed_audio_path: Path | None = None
 
     if mix_original_audio:
-        original_mix_path = workspace / f"{stem}.original-mix.wav"
-        mixed_path = workspace / f"{stem}.{target_language}.mixed.wav"
+        original_mix_path = artifact_paths.mix_original_audio_path
+        mixed_path = artifact_paths.mixed_audio_path
 
         mix_original_audio_path = original_mix_path
         mixed_audio_path = mixed_path
@@ -413,11 +472,7 @@ def dub_video(
     srt_path: Path | None = None
 
     if export_srt:
-        resolved_srt_path = (
-            Path(srt_output_path)
-            if srt_output_path is not None
-            else output_file.with_suffix(".srt")
-        )
+        resolved_srt_path = artifact_paths.srt_path
 
         with _progress_stage(
             progress_callback,
@@ -433,11 +488,7 @@ def dub_video(
     manifest_path: Path | None = None
 
     if write_manifest:
-        resolved_manifest_path = (
-            Path(manifest_output_path)
-            if manifest_output_path is not None
-            else workspace / f"{stem}.{target_language}.manifest.json"
-        )
+        resolved_manifest_path = artifact_paths.manifest_path
 
         with _progress_stage(
             progress_callback,
