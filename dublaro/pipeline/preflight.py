@@ -57,6 +57,7 @@ def validate_dub_preflight(
     srt_output_path: str | Path | None = None,
     write_manifest: bool = True,
     manifest_output_path: str | Path | None = None,
+    resume: bool = False,
 ) -> DubPreflightReport:
     issues: list[PreflightIssue] = []
 
@@ -75,7 +76,9 @@ def validate_dub_preflight(
             if srt_output_path is not None
             else output_file.with_suffix(".srt")
         )
-        _check_output_path(issues, "SRT output", srt_file, overwrite)
+        _check_output_path(
+            issues, "SRT output", srt_file, overwrite, allow_existing=resume
+        )
 
     if write_manifest and manifest_output_path is not None:
         _check_output_path(
@@ -83,6 +86,7 @@ def validate_dub_preflight(
             "Manifest output",
             Path(manifest_output_path),
             overwrite,
+            allow_existing=resume,
         )
 
     _check_ffmpeg(issues, ffmpeg_executable)
@@ -145,6 +149,7 @@ def _check_output_path(
     label: str,
     path: Path,
     overwrite: bool,
+    allow_existing: bool = False,
 ) -> None:
     parent = path.parent
 
@@ -167,7 +172,7 @@ def _check_output_path(
         )
         return
 
-    if not overwrite:
+    if not overwrite and not allow_existing:
         _add_error(
             issues,
             "output_exists",

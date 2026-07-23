@@ -642,6 +642,7 @@ def test_dub_command_runs_full_pipeline(
         manifest_output_path: Path | None = None,
         progress_callback: object | None = None,
         ffmpeg_executable: str = "ffmpeg",
+        resume: bool = False,
         overwrite: bool = False,
     ) -> FakeArtifacts:
         calls.append(
@@ -672,6 +673,7 @@ def test_dub_command_runs_full_pipeline(
                 "manifest_output_path": manifest_output_path,
                 "progress_callback": progress_callback,
                 "ffmpeg_executable": ffmpeg_executable,
+                "resume": resume,
                 "overwrite": overwrite,
             }
         )
@@ -757,6 +759,7 @@ def test_dub_command_runs_full_pipeline(
             "manifest_output_path": tmp_path / "video.pl.manifest.json",
             "progress_callback": cli.print_dub_progress,
             "ffmpeg_executable": "ffmpeg-test",
+            "resume": False,
             "overwrite": True,
         }
     ]
@@ -808,3 +811,77 @@ def test_dub_command_stops_on_preflight_error(
     assert "Preflight failed" in result.output
     assert "ffmpeg_missing" in result.output
     assert calls == []
+
+
+def test_dub_command_passes_resume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(*args: object, **kwargs: object) -> FakeArtifacts:
+        calls.append(kwargs)
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(
+            dubbed_video_path=output_path,
+            workspace_dir=tmp_path / "workspace",
+        )
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--workspace",
+            str(tmp_path / "workspace"),
+            "--resume",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["resume"] is True
+
+
+def test_dub_command_rejects_resume_with_overwrite(tmp_path: Path) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--resume",
+            "--overwrite",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--resume cannot be used with --overwrite" in result.output

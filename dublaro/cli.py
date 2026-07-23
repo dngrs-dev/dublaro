@@ -220,6 +220,11 @@ def print_dub_progress(
 
     if status == "failed":
         console.print(f"[red]Failed:[/red] {message}")
+        return
+
+    if status == "skipped":
+        console.print(f"[yellow]Skipping:[/yellow] {message}")
+        return
 
 
 @app.command("extract-audio")
@@ -1174,6 +1179,13 @@ def dub(
             help="Directory for intermediate artifacts.",
         ),
     ] = None,
+    resume_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--resume/--no-resume",
+            help="Reuse valid intermediate workspace artifacts.",
+        ),
+    ] = False,
     asr_backend: Annotated[
         str,
         typer.Option(
@@ -1419,6 +1431,9 @@ def dub(
     if manifest_output_path is not None and not write_manifest_enabled:
         raise typer.BadParameter("--manifest-output cannot be used with --no-manifest.")
 
+    if resume_enabled and overwrite:
+        raise typer.BadParameter("--resume cannot be used with --overwrite.")
+
     if preflight_enabled:
         report = validate_dub_preflight(
             video_path=video_path,
@@ -1439,6 +1454,7 @@ def dub(
             srt_output_path=srt_output_path,
             write_manifest=write_manifest_enabled,
             manifest_output_path=manifest_output_path,
+            resume=resume_enabled,
         )
         print_preflight_report(report)
 
@@ -1491,6 +1507,7 @@ def dub(
             write_manifest=write_manifest_enabled,
             manifest_output_path=manifest_output_path,
             ffmpeg_executable=ffmpeg_executable,
+            resume=resume_enabled,
             overwrite=overwrite,
         )
     except (

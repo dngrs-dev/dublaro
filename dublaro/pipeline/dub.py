@@ -21,6 +21,11 @@ from dublaro.pipeline.manifest import (
     save_manifest,
 )
 from dublaro.pipeline.mix import mix_original_audio_with_dubbed_speech
+from dublaro.pipeline.resume import (
+    load_reusable_synthesized_transcript,
+    load_reusable_transcript,
+    reusable_file,
+)
 from dublaro.pipeline.subtitles import SrtTextMode, save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
@@ -60,7 +65,7 @@ DubbingProgressStep = Literal[
     "write_manifest",
 ]
 
-DubbingProgressStatus = Literal["started", "finished", "failed"]
+DubbingProgressStatus = Literal["started", "finished", "failed", "skipped"]
 
 DubbingProgressCallback = Callable[
     [DubbingProgressStep, DubbingProgressStatus, str],
@@ -87,6 +92,15 @@ def _progress_stage(
         raise
 
     callback(step, "finished", message)
+
+
+def _progress_skipped(
+    callback: DubbingProgressCallback | None,
+    step: DubbingProgressStep,
+    message: str,
+) -> None:
+    if callback is not None:
+        callback(step, "skipped", message)
 
 
 def dub_video(
@@ -121,6 +135,7 @@ def dub_video(
     manifest_output_path: str | Path | None = None,
     progress_callback: DubbingProgressCallback | None = None,
     ffmpeg_executable: str = "ffmpeg",
+    resume: bool = False,
     overwrite: bool = False,
 ) -> DubbingArtifacts:
     started_at = datetime.now(UTC)
@@ -129,6 +144,10 @@ def dub_video(
         raise ValueError(
             "manifest_output_path cannot be used when write_manifest is False."
         )
+
+    if resume and overwrite:
+        raise ValueError("resume cannot be used with overwrite.")
+
     video_file = Path(video_path)
     output_file = Path(output_path)
     workspace = Path(workspace_dir)
@@ -147,74 +166,127 @@ def dub_video(
     speech_dir = workspace / f"{stem}.{target_language}.speech"
     speech_track_path = workspace / f"{stem}.{target_language}.speech-track.wav"
 
-    with _progress_stage(
-        progress_callback,
-        "extract_audio",
-        "Extracting audio from video.",
-    ):
-        extracted_audio_path = extract_audio_from_video(
-            video_file,
-            extracted_audio_path,
-            sample_rate=asr_sample_rate,
-            channels=1,
-            overwrite=overwrite,
-            executable=ffmpeg_executable,
+    if resume and reusable_file(extracted_audio_path):
+        _progress_skipped(
+            progress_callback,
+            "extract_audio",
+            f"Using existing extracted audio: {extracted_audio_path}.",
         )
+    else:
+        with _progress_stage(
+            progress_callback,
+            "extract_audio",
+            "Extracting audio from video.",
+        ):
+            extracted_audio_path = extract_audio_from_video(
+                video_file,
+                extracted_audio_path,
+                sample_rate=asr_sample_rate,
+                channels=1,
+                overwrite=overwrite,
+                executable=ffmpeg_executable,
+            )
 
-    with _progress_stage(
-        progress_callback,
-        "transcribe",
-        "Transcribing source audio.",
-    ):
-        source_transcript = transcribe_audio(
-            extracted_audio_path,
-            adapter=asr_adapter,
-            options=TranscriptionOptions(source_language=source_language),
-        )
-        save_transcript(source_transcript, source_transcript_path)
+    source_transcript = (
+        load_reusable_transcript(source_transcript_path) if resume else None
+    )
 
-    with _progress_stage(
-        progress_callback,
-        "translate",
-        f"Translating transcript to {target_language}.",
-    ):
-        translated_transcript = translate_transcript(
-            source_transcript,
-            adapter=translation_adapter,
-            target_language=target_language,
-            source_language=source_language,
-            group_segments=translation_group_segments,
-            max_group_pause_seconds=max_translation_group_pause_seconds,
-            max_group_duration_seconds=max_translation_group_duration_seconds,
+    if source_transcript is not None:
+        _progress_skipped(
+            progress_callback,
+            "transcribe",
+            f"Using existing source transcript: {source_transcript_path}.",
         )
-        save_transcript(translated_transcript, translated_transcript_path)
+    else:
+        with _progress_stage(
+            progress_callback,
+            "transcribe",
+            "Transcribing source audio.",
+        ):
+            source_transcript = transcribe_audio(
+                extracted_audio_path,
+                adapter=asr_adapter,
+                options=TranscriptionOptions(source_language=source_language),
+            )
+            save_transcript(source_transcript, source_transcript_path)
 
-    with _progress_stage(
-        progress_callback,
-        "adapt_text",
-        "Adapting translated text for timing.",
-    ):
-        adapted_transcript = adapt_transcript_text(
-            translated_transcript,
-            adapter=text_adapter,
-            target_language=target_language,
-            source_language=source_language,
-        )
-        save_transcript(adapted_transcript, adapted_transcript_path)
+    translated_transcript = (
+        load_reusable_transcript(translated_transcript_path) if resume else None
+    )
 
-    with _progress_stage(
-        progress_callback,
-        "synthesize",
-        "Synthesizing speech clips.",
-    ):
-        synthesized_transcript = synthesize_transcript_speech(
-            adapted_transcript,
-            adapter=tts_adapter,
-            output_dir=speech_dir,
-            language=target_language,
-            sample_rate=speech_sample_rate,
+    if translated_transcript is not None:
+        _progress_skipped(
+            progress_callback,
+            "translate",
+            f"Using existing translated transcript: {translated_transcript_path}.",
         )
-        save_transcript(synthesized_transcript, synthesized_transcript_path)
+    else:
+        with _progress_stage(
+            progress_callback,
+            "translate",
+            f"Translating transcript to {target_language}.",
+        ):
+            translated_transcript = translate_transcript(
+                source_transcript,
+                adapter=translation_adapter,
+                target_language=target_language,
+                source_language=source_language,
+                group_segments=translation_group_segments,
+                max_group_pause_seconds=max_translation_group_pause_seconds,
+                max_group_duration_seconds=max_translation_group_duration_seconds,
+            )
+            save_transcript(translated_transcript, translated_transcript_path)
+
+    adapted_transcript = (
+        load_reusable_transcript(adapted_transcript_path) if resume else None
+    )
+
+    if adapted_transcript is not None:
+        _progress_skipped(
+            progress_callback,
+            "adapt_text",
+            f"Using existing adapted transcript: {adapted_transcript_path}.",
+        )
+    else:
+        with _progress_stage(
+            progress_callback,
+            "adapt_text",
+            "Adapting translated text for timing.",
+        ):
+            adapted_transcript = adapt_transcript_text(
+                translated_transcript,
+                adapter=text_adapter,
+                target_language=target_language,
+                source_language=source_language,
+            )
+            save_transcript(adapted_transcript, adapted_transcript_path)
+
+    synthesized_transcript = (
+        load_reusable_synthesized_transcript(synthesized_transcript_path)
+        if resume
+        else None
+    )
+
+    if synthesized_transcript is not None:
+        _progress_skipped(
+            progress_callback,
+            "synthesize",
+            f"Using existing synthesized speech: {synthesized_transcript_path}.",
+        )
+    else:
+        with _progress_stage(
+            progress_callback,
+            "synthesize",
+            "Synthesizing speech clips.",
+        ):
+            synthesized_transcript = synthesize_transcript_speech(
+                adapted_transcript,
+                adapter=tts_adapter,
+                output_dir=speech_dir,
+                language=target_language,
+                sample_rate=speech_sample_rate,
+            )
+            save_transcript(synthesized_transcript, synthesized_transcript_path)
 
     fitted_transcript_path: Path | None = None
     fitted_speech_dir: Path | None = None
@@ -224,67 +296,106 @@ def dub_video(
         fitted_transcript_path = workspace / f"{stem}.{target_language}.fitted.json"
         fitted_speech_dir = workspace / f"{stem}.{target_language}.fitted-speech"
 
+        reusable_fitted_transcript = (
+            load_reusable_synthesized_transcript(fitted_transcript_path)
+            if resume
+            else None
+        )
+
+        if reusable_fitted_transcript is not None:
+            speech_timeline_transcript = reusable_fitted_transcript
+            _progress_skipped(
+                progress_callback,
+                "fit_speech",
+                f"Using existing fitted transcript: {fitted_transcript_path}.",
+            )
+        else:
+            with _progress_stage(
+                progress_callback,
+                "fit_speech",
+                "Fitting overlong speech clips to segment timing.",
+            ):
+                speech_timeline_transcript = fit_generated_speech_to_segments(
+                    synthesized_transcript,
+                    output_dir=fitted_speech_dir,
+                    max_speedup=max_speech_speedup,
+                    min_overrun_seconds=min_speech_overrun_seconds,
+                    overwrite=overwrite,
+                    executable=ffmpeg_executable,
+                )
+                save_transcript(speech_timeline_transcript, fitted_transcript_path)
+
+    if resume and reusable_file(speech_track_path):
+        _progress_skipped(
+            progress_callback,
+            "align_speech",
+            f"Using existing speech track: {speech_track_path}.",
+        )
+    else:
         with _progress_stage(
             progress_callback,
-            "fit_speech",
-            "Fitting overlong speech clips to segment timing.",
+            "align_speech",
+            "Building timed speech track.",
         ):
-            speech_timeline_transcript = fit_generated_speech_to_segments(
-                synthesized_transcript,
-                output_dir=fitted_speech_dir,
-                max_speedup=max_speech_speedup,
-                min_overrun_seconds=min_speech_overrun_seconds,
-                overwrite=overwrite,
-                executable=ffmpeg_executable,
+            speech_track_path = build_speech_timeline(
+                speech_timeline_transcript,
+                output_path=speech_track_path,
+                sample_rate=speech_sample_rate,
             )
-            save_transcript(speech_timeline_transcript, fitted_transcript_path)
-
-    with _progress_stage(
-        progress_callback,
-        "align_speech",
-        "Building timed speech track.",
-    ):
-        speech_track_path = build_speech_timeline(
-            speech_timeline_transcript,
-            output_path=speech_track_path,
-            sample_rate=speech_sample_rate,
-        )
 
     audio_for_export_path = speech_track_path
     mix_original_audio_path: Path | None = None
     mixed_audio_path: Path | None = None
 
     if mix_original_audio:
-        mix_original_audio_path = workspace / f"{stem}.original-mix.wav"
-        mixed_audio_path = workspace / f"{stem}.{target_language}.mixed.wav"
+        original_mix_path = workspace / f"{stem}.original-mix.wav"
+        mixed_path = workspace / f"{stem}.{target_language}.mixed.wav"
 
-        with _progress_stage(
-            progress_callback,
-            "mix_original_audio",
-            "Mixing dubbed speech over original audio.",
-        ):
-            mix_original_audio_path = extract_audio_from_video(
-                video_file,
-                mix_original_audio_path,
-                sample_rate=speech_sample_rate,
-                channels=1,
-                overwrite=overwrite,
-                executable=ffmpeg_executable,
+        mix_original_audio_path = original_mix_path
+        mixed_audio_path = mixed_path
+
+        if resume and reusable_file(mixed_path):
+            audio_for_export_path = mixed_path
+            _progress_skipped(
+                progress_callback,
+                "mix_original_audio",
+                f"Using existing mixed audio: {mixed_path}.",
             )
+        else:
+            with _progress_stage(
+                progress_callback,
+                "mix_original_audio",
+                "Mixing dubbed speech over original audio.",
+            ):
+                if resume and reusable_file(original_mix_path):
+                    _progress_skipped(
+                        progress_callback,
+                        "mix_original_audio",
+                        f"Using existing original mix audio: {original_mix_path}.",
+                    )
+                else:
+                    mix_original_audio_path = extract_audio_from_video(
+                        video_file,
+                        original_mix_path,
+                        sample_rate=speech_sample_rate,
+                        channels=1,
+                        overwrite=overwrite,
+                        executable=ffmpeg_executable,
+                    )
 
-            mixed_audio_path = mix_original_audio_with_dubbed_speech(
-                speech_timeline_transcript,
-                original_audio_path=mix_original_audio_path,
-                speech_track_path=speech_track_path,
-                output_path=mixed_audio_path,
-                original_gain=original_audio_gain,
-                ducking_gain=ducking_gain,
-                speech_gain=speech_gain,
-                ducking_margin_seconds=ducking_margin_seconds,
-                ducking_fade_seconds=ducking_fade_seconds,
-            )
+                mixed_audio_path = mix_original_audio_with_dubbed_speech(
+                    speech_timeline_transcript,
+                    original_audio_path=mix_original_audio_path,
+                    speech_track_path=speech_track_path,
+                    output_path=mixed_path,
+                    original_gain=original_audio_gain,
+                    ducking_gain=ducking_gain,
+                    speech_gain=speech_gain,
+                    ducking_margin_seconds=ducking_margin_seconds,
+                    ducking_fade_seconds=ducking_fade_seconds,
+                )
 
-            audio_for_export_path = mixed_audio_path
+                audio_for_export_path = mixed_audio_path
 
     with _progress_stage(
         progress_callback,
@@ -364,6 +475,7 @@ def dub_video(
                     export_srt=export_srt,
                     srt_text_mode=srt_text_mode,
                     ffmpeg_executable=ffmpeg_executable,
+                    resume=resume,
                     overwrite=overwrite,
                 ),
                 artifacts=DubbingArtifactsManifest(

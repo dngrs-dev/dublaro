@@ -41,6 +41,7 @@ class DubbingAdaptersManifest(BaseModel):
 class DubbingOptionsManifest(BaseModel):
     asr_sample_rate: int
     speech_sample_rate: int
+    resume: bool
     fit_speech: bool
     max_speech_speedup: float
     min_speech_overrun_seconds: float

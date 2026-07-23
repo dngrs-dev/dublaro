@@ -10,8 +10,36 @@ from dublaro.adapters.tts import FakeTtsAdapter
 from dublaro.audio.wav import write_mono_pcm16_wav
 from dublaro.pipeline import dub as dub_module
 from dublaro.pipeline.dub import dub_video
-from dublaro.pipeline.transcribe import load_transcript
-from dublaro.schemas import Transcript
+from dublaro.pipeline.transcribe import load_transcript, save_transcript
+from dublaro.schemas import Segment, Transcript
+
+
+class ExplodingAsrAdapter:
+    name = "exploding-asr"
+
+    def transcribe(self, *args: object, **kwargs: object) -> Transcript:
+        raise AssertionError("ASR should not run during resume")
+
+
+class ExplodingTranslationAdapter:
+    name = "exploding-translation"
+
+    def translate_text(self, *args: object, **kwargs: object) -> str:
+        raise AssertionError("Translation should not run during resume")
+
+
+class ExplodingTextAdapter:
+    name = "exploding-text-adapter"
+
+    def adapt_segment(self, *args: object, **kwargs: object) -> str:
+        raise AssertionError("Text adapter should not run during resume")
+
+
+class ExplodingTtsAdapter:
+    name = "exploding-tts"
+
+    def synthesize_segment(self, *args: object, **kwargs: object) -> Path:
+        raise AssertionError("TTS should not run during resume")
 
 
 def test_dub_video_runs_full_pipeline(
@@ -660,3 +688,171 @@ def test_dub_video_writes_manifest_by_default(
     assert data["artifacts"]["dubbed_video_path"] == str(output_path)
     assert data["artifacts"]["manifest_path"] == str(manifest_path)
     assert data["metadata"]["source_segment_count"] == "1"
+
+
+def test_dub_video_resumes_intermediate_artifacts_but_regenerates_final_video(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    extracted_audio_path = workspace_dir / "lesson.audio.wav"
+    source_transcript_path = workspace_dir / "lesson.en.json"
+    translated_transcript_path = workspace_dir / "lesson.pl.json"
+    adapted_transcript_path = workspace_dir / "lesson.pl.adapted.json"
+    synthesized_transcript_path = workspace_dir / "lesson.pl.synthesized.json"
+    speech_dir = workspace_dir / "lesson.pl.speech"
+    speech_path = speech_dir / "seg-0001.wav"
+    speech_track_path = workspace_dir / "lesson.pl.speech-track.wav"
+
+    speech_dir.mkdir(parents=True, exist_ok=True)
+    extracted_audio_path.write_bytes(b"existing audio")
+    speech_path.write_bytes(b"existing speech")
+    speech_track_path.write_bytes(b"existing speech track")
+
+    save_transcript(
+        Transcript(
+            id="lesson.audio",
+            source_language="en",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    source_text="Hello",
+                    source_language="en",
+                )
+            ],
+        ),
+        source_transcript_path,
+    )
+
+    save_transcript(
+        Transcript(
+            id="lesson.audio",
+            source_language="en",
+            target_language="pl",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    source_text="Hello",
+                    translated_text="Czesc",
+                    target_language="pl",
+                )
+            ],
+        ),
+        translated_transcript_path,
+    )
+
+    save_transcript(
+        Transcript(
+            id="lesson.audio",
+            source_language="en",
+            target_language="pl",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    source_text="Hello",
+                    translated_text="Czesc",
+                    adapted_text="Czesc",
+                    target_language="pl",
+                )
+            ],
+        ),
+        adapted_transcript_path,
+    )
+
+    save_transcript(
+        Transcript(
+            id="lesson.audio",
+            source_language="en",
+            target_language="pl",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    source_text="Hello",
+                    translated_text="Czesc",
+                    adapted_text="Czesc",
+                    target_language="pl",
+                    generated_audio_path=str(speech_path),
+                )
+            ],
+        ),
+        synthesized_transcript_path,
+    )
+
+    def fail_extract_audio_from_video(*args: object, **kwargs: object) -> Path:
+        raise AssertionError("extract_audio_from_video should not run during resume")
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"new dubbed video")
+        return output_file
+
+    monkeypatch.setattr(
+        dub_module,
+        "extract_audio_from_video",
+        fail_extract_audio_from_video,
+    )
+    monkeypatch.setattr(
+        dub_module,
+        "export_dubbed_video",
+        fake_export_dubbed_video,
+    )
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=ExplodingAsrAdapter(),
+        translation_adapter=ExplodingTranslationAdapter(),
+        text_adapter=ExplodingTextAdapter(),
+        tts_adapter=ExplodingTtsAdapter(),
+        resume=True,
+        write_manifest=False,
+    )
+
+    assert artifacts.extracted_audio_path == extracted_audio_path
+    assert artifacts.source_transcript_path == source_transcript_path
+    assert artifacts.translated_transcript_path == translated_transcript_path
+    assert artifacts.adapted_transcript_path == adapted_transcript_path
+    assert artifacts.synthesized_transcript_path == synthesized_transcript_path
+    assert artifacts.speech_track_path == speech_track_path
+    assert artifacts.dubbed_video_path == output_path
+    assert output_path.read_bytes() == b"new dubbed video"
+
+
+def test_dub_video_rejects_resume_with_overwrite(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="resume"):
+        dub_video(
+            tmp_path / "lesson.mp4",
+            tmp_path / "lesson.pl.dubbed.mp4",
+            source_language="en",
+            target_language="pl",
+            workspace_dir=tmp_path / "workspace",
+            asr_adapter=FakeAsrAdapter(),
+            translation_adapter=FakeTranslationAdapter(),
+            text_adapter=FakeTextAdapter(),
+            tts_adapter=FakeTtsAdapter(),
+            resume=True,
+            overwrite=True,
+        )
