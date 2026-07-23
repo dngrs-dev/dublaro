@@ -11,6 +11,7 @@ from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
 from dublaro.pipeline.mix import mix_original_audio_with_dubbed_speech
+from dublaro.pipeline.subtitles import SrtTextMode, save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
@@ -31,6 +32,7 @@ class DubbingArtifacts:
     fitted_speech_dir: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
+    srt_path: Path | None
 
 
 def dub_video(
@@ -58,6 +60,9 @@ def dub_video(
     translation_group_segments: bool = True,
     max_translation_group_pause_seconds: float = 0.8,
     max_translation_group_duration_seconds: float = 12.0,
+    export_srt: bool = False,
+    srt_output_path: str | Path | None = None,
+    srt_text_mode: SrtTextMode = "adapted",
     ffmpeg_executable: str = "ffmpeg",
     overwrite: bool = False,
 ) -> DubbingArtifacts:
@@ -186,6 +191,21 @@ def dub_video(
         executable=ffmpeg_executable,
     )
 
+    srt_path: Path | None = None
+
+    if export_srt:
+        resolved_srt_path = (
+            Path(srt_output_path)
+            if srt_output_path is not None
+            else output_file.with_suffix(".srt")
+        )
+
+        srt_path = save_srt(
+            speech_timeline_transcript,
+            resolved_srt_path,
+            text_mode=srt_text_mode,
+        )
+
     return DubbingArtifacts(
         workspace_dir=workspace,
         extracted_audio_path=extracted_audio_path,
@@ -200,4 +220,5 @@ def dub_video(
         fitted_speech_dir=fitted_speech_dir,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
+        srt_path=srt_path,
     )

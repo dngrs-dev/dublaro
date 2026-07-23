@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 from rich.console import Console
@@ -44,7 +44,7 @@ from dublaro.pipeline.mix import (
     default_mixed_audio_path,
     mix_original_audio_with_dubbed_speech,
 )
-from dublaro.pipeline.subtitles import default_srt_path, save_srt
+from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
     default_synthesized_transcript_path,
@@ -161,6 +161,17 @@ def create_tts_adapter(
         )
 
     raise typer.BadParameter("TTS backend must be 'fake' or 'piper'.")
+
+
+def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
+    allowed_modes = {"auto", "source", "translated", "adapted"}
+
+    if text_mode not in allowed_modes:
+        raise typer.BadParameter(
+            "SRT text must be one of: auto, source, translated, adapted."
+        )
+
+    return cast(SrtTextMode, text_mode)
 
 
 @app.command("extract-audio")
@@ -515,7 +526,7 @@ def export_srt(
         saved_path = save_srt(
             transcript,
             srt_output,
-            text_mode=text_mode,  # type: ignore[arg-type]
+            text_mode=parse_srt_text_mode(text_mode),
         )
     except (FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
@@ -1232,6 +1243,27 @@ def dub(
             help="Fade time for ducking transitions.",
         ),
     ] = 0.05,
+    export_srt_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--export-srt/--no-export-srt",
+            help="Save an external SRT subtitle file for the final spoken text.",
+        ),
+    ] = False,
+    srt_output_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--srt-output",
+            help="Output SRT path. Defaults to output video path with .srt extension.",
+        ),
+    ] = None,
+    srt_text_mode: Annotated[
+        str,
+        typer.Option(
+            "--srt-text",
+            help="SRT text: auto, source, translated, or adapted.",
+        ),
+    ] = "adapted",
     ffmpeg_executable: Annotated[
         str,
         typer.Option(
@@ -1289,6 +1321,9 @@ def dub(
             speech_gain=speech_gain,
             ducking_margin_seconds=ducking_margin_seconds,
             ducking_fade_seconds=ducking_fade_seconds,
+            export_srt=export_srt_enabled,
+            srt_output_path=srt_output_path,
+            srt_text_mode=parse_srt_text_mode(srt_text_mode),
             ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
         )
@@ -1310,6 +1345,8 @@ def dub(
         )
     if artifacts.mixed_audio_path is not None:
         console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
+    if artifacts.srt_path is not None:
+        console.print(f"[green]SRT subtitles:[/green] {artifacts.srt_path}")
 
     if asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")

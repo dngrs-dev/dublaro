@@ -557,6 +557,7 @@ def test_dub_command_runs_full_pipeline(
         workspace_dir: Path
         fitted_transcript_path: Path | None = None
         mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
 
     def fake_dub_video(
         video_path: Path,
@@ -583,6 +584,9 @@ def test_dub_command_runs_full_pipeline(
         speech_gain: float = 1.0,
         ducking_margin_seconds: float = 0.05,
         ducking_fade_seconds: float = 0.05,
+        export_srt: bool = False,
+        srt_output_path: Path | None = None,
+        srt_text_mode: str = "adapted",
         ffmpeg_executable: str = "ffmpeg",
         overwrite: bool = False,
     ) -> FakeArtifacts:
@@ -607,6 +611,9 @@ def test_dub_command_runs_full_pipeline(
                 "speech_gain": speech_gain,
                 "ducking_margin_seconds": ducking_margin_seconds,
                 "ducking_fade_seconds": ducking_fade_seconds,
+                "export_srt": export_srt,
+                "srt_output_path": srt_output_path,
+                "srt_text_mode": srt_text_mode,
                 "ffmpeg_executable": ffmpeg_executable,
                 "overwrite": overwrite,
             }
@@ -649,6 +656,11 @@ def test_dub_command_runs_full_pipeline(
             "0.2",
             "--ducking-fade",
             "0.03",
+            "--export-srt",
+            "--srt-output",
+            str(tmp_path / "video.pl.srt"),
+            "--srt-text",
+            "adapted",
             "--ffmpeg",
             "ffmpeg-test",
             "--overwrite",
@@ -678,6 +690,9 @@ def test_dub_command_runs_full_pipeline(
             "speech_gain": 1.1,
             "ducking_margin_seconds": 0.2,
             "ducking_fade_seconds": 0.03,
+            "export_srt": True,
+            "srt_output_path": tmp_path / "video.pl.srt",
+            "srt_text_mode": "adapted",
             "ffmpeg_executable": "ffmpeg-test",
             "overwrite": True,
         }
