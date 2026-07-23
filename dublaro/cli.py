@@ -31,7 +31,11 @@ from dublaro.pipeline.align import (
     build_speech_timeline,
     default_speech_timeline_path,
 )
-from dublaro.pipeline.dub import dub_video
+from dublaro.pipeline.dub import (
+    DubbingProgressStatus,
+    DubbingProgressStep,
+    dub_video,
+)
 from dublaro.pipeline.export import (
     default_dubbed_video_path,
     export_dubbed_video,
@@ -174,6 +178,19 @@ def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
         )
 
     return cast(SrtTextMode, text_mode)
+
+
+def print_dub_progress(
+    step: DubbingProgressStep,
+    status: DubbingProgressStatus,
+    message: str,
+) -> None:
+    if status == "started":
+        console.print(f"[cyan]Starting:[/cyan] {message}")
+        return
+
+    if status == "failed":
+        console.print(f"[red]Failed:[/red] {message}")
 
 
 @app.command("extract-audio")
@@ -1391,6 +1408,7 @@ def dub(
             export_srt=export_srt_enabled,
             srt_output_path=srt_output_path,
             srt_text_mode=parse_srt_text_mode(srt_text_mode),
+            progress_callback=print_dub_progress,
             ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
         )

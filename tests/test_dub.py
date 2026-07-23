@@ -480,3 +480,104 @@ def test_dub_video_can_export_srt(
     assert srt_path.read_text(encoding="utf-8") == (
         "1\n00:00:00,000 --> 00:00:01,000\n[pl] This is a placeholder transcript.\n"
     )
+
+
+def test_dub_video_reports_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    events: list[tuple[str, str, str]] = []
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        return output_file
+
+    def record_progress(step: str, status: str, message: str) -> None:
+        events.append((step, status, message))
+
+    monkeypatch.setattr(
+        dub_module,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(
+        dub_module,
+        "export_dubbed_video",
+        fake_export_dubbed_video,
+    )
+
+    dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        progress_callback=record_progress,
+        overwrite=True,
+    )
+
+    assert [event[0] for event in events] == [
+        "extract_audio",
+        "extract_audio",
+        "transcribe",
+        "transcribe",
+        "translate",
+        "translate",
+        "adapt_text",
+        "adapt_text",
+        "synthesize",
+        "synthesize",
+        "align_speech",
+        "align_speech",
+        "export_video",
+        "export_video",
+    ]
+
+    assert [event[1] for event in events] == [
+        "started",
+        "finished",
+        "started",
+        "finished",
+        "started",
+        "finished",
+        "started",
+        "finished",
+        "started",
+        "finished",
+        "started",
+        "finished",
+        "started",
+        "finished",
+    ]

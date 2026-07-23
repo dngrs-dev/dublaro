@@ -637,6 +637,7 @@ def test_dub_command_runs_full_pipeline(
         export_srt: bool = False,
         srt_output_path: Path | None = None,
         srt_text_mode: str = "adapted",
+        progress_callback: object | None = None,
         ffmpeg_executable: str = "ffmpeg",
         overwrite: bool = False,
     ) -> FakeArtifacts:
@@ -664,6 +665,7 @@ def test_dub_command_runs_full_pipeline(
                 "export_srt": export_srt,
                 "srt_output_path": srt_output_path,
                 "srt_text_mode": srt_text_mode,
+                "progress_callback": progress_callback,
                 "ffmpeg_executable": ffmpeg_executable,
                 "overwrite": overwrite,
             }
@@ -743,6 +745,7 @@ def test_dub_command_runs_full_pipeline(
             "export_srt": True,
             "srt_output_path": tmp_path / "video.pl.srt",
             "srt_text_mode": "adapted",
+            "progress_callback": cli.print_dub_progress,
             "ffmpeg_executable": "ffmpeg-test",
             "overwrite": True,
         }
