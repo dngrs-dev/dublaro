@@ -608,6 +608,7 @@ def test_dub_command_runs_full_pipeline(
         fitted_transcript_path: Path | None = None
         mixed_audio_path: Path | None = None
         srt_path: Path | None = None
+        manifest_path: Path | None = None
 
     def fake_dub_video(
         video_path: Path,
@@ -637,6 +638,8 @@ def test_dub_command_runs_full_pipeline(
         export_srt: bool = False,
         srt_output_path: Path | None = None,
         srt_text_mode: str = "adapted",
+        write_manifest: bool = True,
+        manifest_output_path: Path | None = None,
         progress_callback: object | None = None,
         ffmpeg_executable: str = "ffmpeg",
         overwrite: bool = False,
@@ -665,6 +668,8 @@ def test_dub_command_runs_full_pipeline(
                 "export_srt": export_srt,
                 "srt_output_path": srt_output_path,
                 "srt_text_mode": srt_text_mode,
+                "write_manifest": write_manifest,
+                "manifest_output_path": manifest_output_path,
                 "progress_callback": progress_callback,
                 "ffmpeg_executable": ffmpeg_executable,
                 "overwrite": overwrite,
@@ -713,6 +718,8 @@ def test_dub_command_runs_full_pipeline(
             str(tmp_path / "video.pl.srt"),
             "--srt-text",
             "adapted",
+            "--manifest-output",
+            str(tmp_path / "video.pl.manifest.json"),
             "--ffmpeg",
             "ffmpeg-test",
             "--overwrite",
@@ -745,6 +752,8 @@ def test_dub_command_runs_full_pipeline(
             "export_srt": True,
             "srt_output_path": tmp_path / "video.pl.srt",
             "srt_text_mode": "adapted",
+            "write_manifest": True,
+            "manifest_output_path": tmp_path / "video.pl.manifest.json",
             "progress_callback": cli.print_dub_progress,
             "ffmpeg_executable": "ffmpeg-test",
             "overwrite": True,

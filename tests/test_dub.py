@@ -1,3 +1,4 @@
+import json
 from array import array
 from pathlib import Path
 
@@ -563,6 +564,8 @@ def test_dub_video_reports_progress(
         "align_speech",
         "export_video",
         "export_video",
+        "write_manifest",
+        "write_manifest",
     ]
 
     assert [event[1] for event in events] == [
@@ -580,4 +583,80 @@ def test_dub_video_reports_progress(
         "finished",
         "started",
         "finished",
+        "started",
+        "finished",
     ]
+
+
+def test_dub_video_writes_manifest_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        return output_file
+
+    monkeypatch.setattr(
+        dub_module, "extract_audio_from_video", fake_extract_audio_from_video
+    )
+    monkeypatch.setattr(dub_module, "export_dubbed_video", fake_export_dubbed_video)
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        overwrite=True,
+    )
+
+    manifest_path = artifacts.manifest_path
+
+    assert manifest_path is not None
+    assert manifest_path == workspace_dir / "lesson.pl.manifest.json"
+    assert manifest_path.exists()
+
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert data["schema_version"] == 1
+    assert data["language"] == {"source": "en", "target": "pl"}
+    assert data["adapters"]["asr"]["name"] == "fake-asr"
+    assert data["adapters"]["translation"]["name"] == "fake-translation"
+    assert data["adapters"]["text_adapter"]["name"] == "fake-text-adapter"
+    assert data["adapters"]["tts"]["name"] == "fake-tts"
+    assert data["options"]["translation_group_segments"] is True
+    assert data["artifacts"]["dubbed_video_path"] == str(output_path)
+    assert data["artifacts"]["manifest_path"] == str(manifest_path)
+    assert data["metadata"]["source_segment_count"] == "1"

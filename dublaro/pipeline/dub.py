@@ -1,6 +1,7 @@
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -13,6 +14,12 @@ from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
+from dublaro.pipeline.manifest import (
+    DubbingArtifactsManifest,
+    DubbingOptionsManifest,
+    build_dubbing_manifest,
+    save_manifest,
+)
 from dublaro.pipeline.mix import mix_original_audio_with_dubbed_speech
 from dublaro.pipeline.subtitles import SrtTextMode, save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
@@ -36,6 +43,7 @@ class DubbingArtifacts:
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
+    manifest_path: Path | None
 
 
 DubbingProgressStep = Literal[
@@ -49,6 +57,7 @@ DubbingProgressStep = Literal[
     "mix_original_audio",
     "export_video",
     "export_srt",
+    "write_manifest",
 ]
 
 DubbingProgressStatus = Literal["started", "finished", "failed"]
@@ -108,10 +117,18 @@ def dub_video(
     export_srt: bool = False,
     srt_output_path: str | Path | None = None,
     srt_text_mode: SrtTextMode = "adapted",
+    write_manifest: bool = True,
+    manifest_output_path: str | Path | None = None,
     progress_callback: DubbingProgressCallback | None = None,
     ffmpeg_executable: str = "ffmpeg",
     overwrite: bool = False,
 ) -> DubbingArtifacts:
+    started_at = datetime.now(UTC)
+
+    if manifest_output_path is not None and not write_manifest:
+        raise ValueError(
+            "manifest_output_path cannot be used when write_manifest is False."
+        )
     video_file = Path(video_path)
     output_file = Path(output_path)
     workspace = Path(workspace_dir)
@@ -302,6 +319,101 @@ def dub_video(
                 text_mode=srt_text_mode,
             )
 
+    manifest_path: Path | None = None
+
+    if write_manifest:
+        resolved_manifest_path = (
+            Path(manifest_output_path)
+            if manifest_output_path is not None
+            else workspace / f"{stem}.{target_language}.manifest.json"
+        )
+
+        with _progress_stage(
+            progress_callback,
+            "write_manifest",
+            "Writing run manifest.",
+        ):
+            finished_at = datetime.now(UTC)
+
+            manifest = build_dubbing_manifest(
+                started_at=started_at,
+                finished_at=finished_at,
+                input_video_path=video_file,
+                output_video_path=dubbed_video_path,
+                source_language=source_transcript.source_language,
+                target_language=target_language,
+                asr_adapter=asr_adapter,
+                translation_adapter=translation_adapter,
+                text_adapter=text_adapter,
+                tts_adapter=tts_adapter,
+                options=DubbingOptionsManifest(
+                    asr_sample_rate=asr_sample_rate,
+                    speech_sample_rate=speech_sample_rate,
+                    fit_speech=fit_speech,
+                    max_speech_speedup=max_speech_speedup,
+                    min_speech_overrun_seconds=min_speech_overrun_seconds,
+                    mix_original_audio=mix_original_audio,
+                    original_audio_gain=original_audio_gain,
+                    ducking_gain=ducking_gain,
+                    speech_gain=speech_gain,
+                    ducking_margin_seconds=ducking_margin_seconds,
+                    ducking_fade_seconds=ducking_fade_seconds,
+                    translation_group_segments=translation_group_segments,
+                    max_translation_group_pause_seconds=max_translation_group_pause_seconds,
+                    max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+                    export_srt=export_srt,
+                    srt_text_mode=srt_text_mode,
+                    ffmpeg_executable=ffmpeg_executable,
+                    overwrite=overwrite,
+                ),
+                artifacts=DubbingArtifactsManifest(
+                    workspace_dir=str(workspace),
+                    extracted_audio_path=str(extracted_audio_path),
+                    source_transcript_path=str(source_transcript_path),
+                    translated_transcript_path=str(translated_transcript_path),
+                    adapted_transcript_path=str(adapted_transcript_path),
+                    synthesized_transcript_path=str(synthesized_transcript_path),
+                    speech_dir=str(speech_dir),
+                    speech_track_path=str(speech_track_path),
+                    dubbed_video_path=str(dubbed_video_path),
+                    fitted_transcript_path=(
+                        str(fitted_transcript_path)
+                        if fitted_transcript_path is not None
+                        else None
+                    ),
+                    fitted_speech_dir=(
+                        str(fitted_speech_dir)
+                        if fitted_speech_dir is not None
+                        else None
+                    ),
+                    mix_original_audio_path=(
+                        str(mix_original_audio_path)
+                        if mix_original_audio_path is not None
+                        else None
+                    ),
+                    mixed_audio_path=(
+                        str(mixed_audio_path) if mixed_audio_path is not None else None
+                    ),
+                    srt_path=str(srt_path) if srt_path is not None else None,
+                    manifest_path=str(resolved_manifest_path),
+                ),
+                metadata={
+                    "source_segment_count": str(len(source_transcript.segments)),
+                    "translated_segment_count": str(
+                        len(translated_transcript.segments)
+                    ),
+                    "adapted_segment_count": str(len(adapted_transcript.segments)),
+                    "synthesized_segment_count": str(
+                        len(synthesized_transcript.segments)
+                    ),
+                    "final_speech_segment_count": str(
+                        len(speech_timeline_transcript.segments)
+                    ),
+                },
+            )
+
+            manifest_path = save_manifest(manifest, resolved_manifest_path)
+
     return DubbingArtifacts(
         workspace_dir=workspace,
         extracted_audio_path=extracted_audio_path,
@@ -317,4 +429,5 @@ def dub_video(
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,
+        manifest_path=manifest_path,
     )

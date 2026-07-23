@@ -1348,6 +1348,20 @@ def dub(
             help="SRT text: auto, source, translated, or adapted.",
         ),
     ] = "adapted",
+    write_manifest_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--manifest/--no-manifest",
+            help="Save a JSON manifest describing this dubbing run.",
+        ),
+    ] = True,
+    manifest_output_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--manifest-output",
+            help="Output manifest path. Defaults to the workspace manifest path.",
+        ),
+    ] = None,
     ffmpeg_executable: Annotated[
         str,
         typer.Option(
@@ -1365,6 +1379,9 @@ def dub(
 ) -> None:
     """Run the full dubbing pipeline."""
     workspace = workspace_dir or Path(".dublaro") / video_path.stem
+
+    if manifest_output_path is not None and not write_manifest_enabled:
+        raise typer.BadParameter("--manifest-output cannot be used with --no-manifest.")
 
     try:
         artifacts = dub_video(
@@ -1409,6 +1426,8 @@ def dub(
             srt_output_path=srt_output_path,
             srt_text_mode=parse_srt_text_mode(srt_text_mode),
             progress_callback=print_dub_progress,
+            write_manifest=write_manifest_enabled,
+            manifest_output_path=manifest_output_path,
             ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
         )
@@ -1432,6 +1451,8 @@ def dub(
         console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
     if artifacts.srt_path is not None:
         console.print(f"[green]SRT subtitles:[/green] {artifacts.srt_path}")
+    if artifacts.manifest_path is not None:
+        console.print(f"[green]Manifest:[/green] {artifacts.manifest_path}")
 
     if asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
