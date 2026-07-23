@@ -720,6 +720,7 @@ def test_dub_command_runs_full_pipeline(
             "adapted",
             "--manifest-output",
             str(tmp_path / "video.pl.manifest.json"),
+            "--no-preflight",
             "--ffmpeg",
             "ffmpeg-test",
             "--overwrite",
@@ -759,3 +760,51 @@ def test_dub_command_runs_full_pipeline(
             "overwrite": True,
         }
     ]
+
+
+def test_dub_command_stops_on_preflight_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dublaro.pipeline.preflight import DubPreflightReport, PreflightIssue
+
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[str] = []
+
+    def fake_validate_dub_preflight(**kwargs: object) -> DubPreflightReport:
+        return DubPreflightReport(
+            (
+                PreflightIssue(
+                    severity="error",
+                    code="ffmpeg_missing",
+                    message="ffmpeg was not found",
+                ),
+            )
+        )
+
+    def fake_dub_video(*args: object, **kwargs: object) -> object:
+        calls.append("dub")
+        raise AssertionError("dub_video should not run")
+
+    monkeypatch.setattr(cli, "validate_dub_preflight", fake_validate_dub_preflight)
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Preflight failed" in result.output
+    assert "ffmpeg_missing" in result.output
+    assert calls == []

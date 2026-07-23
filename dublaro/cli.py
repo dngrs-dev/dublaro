@@ -49,6 +49,7 @@ from dublaro.pipeline.mix import (
     default_mixed_audio_path,
     mix_original_audio_with_dubbed_speech,
 )
+from dublaro.pipeline.preflight import DubPreflightReport, validate_dub_preflight
 from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
@@ -178,6 +179,34 @@ def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
         )
 
     return cast(SrtTextMode, text_mode)
+
+
+def print_preflight_report(report: DubPreflightReport) -> None:
+    if not report.issues:
+        console.print("[green]Preflight ok.[/green]")
+        return
+
+    if report.has_errors:
+        console.print("[red]Preflight failed.[/red]")
+    else:
+        console.print("[yellow]Preflight warnings.[/yellow]")
+
+    table = Table(title="Preflight")
+    table.add_column("Severity")
+    table.add_column("Code")
+    table.add_column("Message", overflow="fold", ratio=3)
+    table.add_column("Hint", overflow="fold", ratio=2)
+
+    for issue in report.issues:
+        style = "red" if issue.severity == "error" else "yellow"
+        table.add_row(
+            f"[{style}]{issue.severity}[/{style}]",
+            issue.code,
+            issue.message,
+            issue.hint or "",
+        )
+
+    console.print(table)
 
 
 def print_dub_progress(
@@ -1362,6 +1391,13 @@ def dub(
             help="Output manifest path. Defaults to the workspace manifest path.",
         ),
     ] = None,
+    preflight_enabled: Annotated[
+        bool,
+        typer.Option(
+            "--preflight/--no-preflight",
+            help="Check tools and paths before starting the dubbing run.",
+        ),
+    ] = True,
     ffmpeg_executable: Annotated[
         str,
         typer.Option(
@@ -1382,6 +1418,32 @@ def dub(
 
     if manifest_output_path is not None and not write_manifest_enabled:
         raise typer.BadParameter("--manifest-output cannot be used with --no-manifest.")
+
+    if preflight_enabled:
+        report = validate_dub_preflight(
+            video_path=video_path,
+            output_path=output_path,
+            workspace_dir=workspace,
+            overwrite=overwrite,
+            ffmpeg_executable=ffmpeg_executable,
+            asr_backend=asr_backend,
+            translation_backend=translation_backend,
+            source_language=source_language,
+            target_language=target_language,
+            install_translation_package=install_package,
+            tts_backend=tts_backend,
+            piper_model_path=piper_model_path,
+            piper_config_path=piper_config_path,
+            piper_executable=piper_executable,
+            export_srt=export_srt_enabled,
+            srt_output_path=srt_output_path,
+            write_manifest=write_manifest_enabled,
+            manifest_output_path=manifest_output_path,
+        )
+        print_preflight_report(report)
+
+        if report.has_errors:
+            raise typer.Exit(code=1)
 
     try:
         artifacts = dub_video(
