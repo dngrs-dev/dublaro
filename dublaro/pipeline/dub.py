@@ -139,8 +139,6 @@ def dub_video(
     resume: bool = False,
     overwrite: bool = False,
 ) -> DubbingArtifacts:
-    started_at = datetime.now(UTC)
-
     paths = DubPaths.build(
         video_path=video_path,
         output_path=output_path,
@@ -180,6 +178,23 @@ def dub_video(
         text_adapter=text_adapter,
         tts=tts_adapter,
     )
+
+    return _run_dub_video(
+        paths=paths,
+        options=options,
+        adapters=adapters,
+        progress_callback=progress_callback,
+    )
+
+
+def _run_dub_video(
+    *,
+    paths: DubPaths,
+    options: DubOptions,
+    adapters: DubAdapters,
+    progress_callback: DubbingProgressCallback | None = None,
+) -> DubbingArtifacts:
+    started_at = datetime.now(UTC)
     artifact_paths = paths.artifacts(options)
 
     video_file = paths.video_path
