@@ -36,6 +36,7 @@ from dublaro.pipeline.subtitles import SrtTextMode, save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
+from dublaro.schemas import Transcript
 
 
 @dataclass(frozen=True)
@@ -256,28 +257,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     speech_dir = artifact_paths.speech_dir
     speech_track_path = artifact_paths.speech_track_path
 
-    source_transcript = (
-        load_reusable_transcript(source_transcript_path) if resume else None
-    )
-
-    if source_transcript is not None:
-        _progress_skipped(
-            progress_callback,
-            "transcribe",
-            f"Using existing source transcript: {source_transcript_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "transcribe",
-            "Transcribing source audio.",
-        ):
-            source_transcript = transcribe_audio(
-                extracted_audio_path,
-                adapter=asr_adapter,
-                options=TranscriptionOptions(source_language=source_language),
-            )
-            save_transcript(source_transcript, source_transcript_path)
+    source_transcript = _transcribe_source_audio(context, extracted_audio_path)
 
     translated_transcript = (
         load_reusable_transcript(translated_transcript_path) if resume else None
@@ -630,3 +610,39 @@ def _extract_audio(context: DubRunContext) -> Path:
             overwrite=context.options.overwrite,
             executable=context.options.ffmpeg_executable,
         )
+
+
+def _transcribe_source_audio(
+    context: DubRunContext,
+    extracted_audio_path: Path,
+) -> Transcript:
+    source_transcript_path = context.artifact_paths.source_transcript_path
+
+    source_transcript = (
+        load_reusable_transcript(source_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if source_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "transcribe",
+            f"Using existing source transcript: {source_transcript_path}.",
+        )
+        return source_transcript
+
+    with _progress_stage(
+        context.progress_callback,
+        "transcribe",
+        "Transcribing source audio.",
+    ):
+        source_transcript = transcribe_audio(
+            extracted_audio_path,
+            adapter=context.adapters.asr,
+            options=TranscriptionOptions(
+                source_language=context.options.source_language,
+            ),
+        )
+        save_transcript(source_transcript, source_transcript_path)
+        return source_transcript
