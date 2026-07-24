@@ -1054,3 +1054,58 @@ preflight = false
     assert result.exit_code == 0
     assert calls[0]["target_language"] == "de"
     assert calls[0]["output_path"] == cli_output_path
+
+
+def test_dub_command_defaults_output_path_next_to_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "zoo.mp4"
+    video_path.write_bytes(b"fake video")
+
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+preflight = false
+""",
+        encoding="utf-8",
+    )
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+
+        workspace_dir = kwargs["workspace_dir"]
+        assert isinstance(workspace_dir, Path)
+
+        return FakeArtifacts(
+            dubbed_video_path=output_path,
+            workspace_dir=workspace_dir,
+        )
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        ["dub", str(video_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["output_path"] == tmp_path / "zoo.pl.dubbed.mp4"

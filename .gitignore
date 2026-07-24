@@ -226,3 +226,6 @@ data/
 
 # Models
 models/
+
+# Config files
+dublaro.toml

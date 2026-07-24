@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from dublaro.config import LoadedConfig, resolve_config_path
+from dublaro.pipeline.export import default_dubbed_video_path
 
 T = TypeVar("T")
 
@@ -130,19 +131,6 @@ def _required_text(
     return value
 
 
-def _required_path(
-    option_name: str,
-    config_name: str,
-    cli_value: Path | None,
-    config_value: Path | None,
-    base_dir: Path | None,
-) -> Path:
-    value = _select_path(cli_value, config_value, base_dir)
-    if value is None:
-        raise ValueError(f"{option_name} is required when {config_name} is not set.")
-    return value
-
-
 def resolve_dub_settings(
     *,
     video_path: Path,
@@ -152,31 +140,43 @@ def resolve_dub_settings(
     config = loaded_config.config.dub
     base_dir = loaded_config.base_dir
 
+    target_language = _required_text(
+        "--to",
+        "dub.target_language",
+        overrides.target_language,
+        config.target_language,
+    )
+
+    default_output_path = default_dubbed_video_path(video_path, target_language)
+    output_path = (
+        _select_path(
+            overrides.output_path,
+            config.output_path,
+            base_dir,
+            default_output_path,
+        )
+        or default_output_path
+    )
+
+    default_workspace_dir = Path(".dublaro") / video_path.stem
+    workspace_dir = (
+        _select_path(
+            overrides.workspace_dir,
+            config.workspace_dir,
+            base_dir,
+            default_workspace_dir,
+        )
+        or default_workspace_dir
+    )
+
     return ResolvedDubSettings(
         source_language=_select_optional(
             overrides.source_language,
             config.source_language,
         ),
-        target_language=_required_text(
-            "--to",
-            "dub.target_language",
-            overrides.target_language,
-            config.target_language,
-        ),
-        output_path=_required_path(
-            "--output",
-            "dub.output_path",
-            overrides.output_path,
-            config.output_path,
-            base_dir,
-        ),
-        workspace_dir=_select_path(
-            overrides.workspace_dir,
-            config.workspace_dir,
-            base_dir,
-            Path(".dublaro") / video_path.stem,
-        )
-        or Path(".dublaro") / video_path.stem,
+        target_language=target_language,
+        output_path=output_path,
+        workspace_dir=workspace_dir,
         resume=_select(overrides.resume, config.resume, False),
         overwrite=_select(overrides.overwrite, config.overwrite, False),
         preflight=_select(overrides.preflight, config.preflight, True),
