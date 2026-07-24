@@ -276,23 +276,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     fitted_transcript_path = speech_timing.fitted_transcript_path
     fitted_speech_dir = speech_timing.fitted_speech_dir
 
-    if resume and reusable_file(speech_track_path):
-        _progress_skipped(
-            progress_callback,
-            "align_speech",
-            f"Using existing speech track: {speech_track_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "align_speech",
-            "Building timed speech track.",
-        ):
-            speech_track_path = build_speech_timeline(
-                speech_timeline_transcript,
-                output_path=speech_track_path,
-                sample_rate=speech_sample_rate,
-            )
+    speech_track_path = _align_speech_track(context, speech_timeline_transcript)
 
     audio_for_export_path = speech_track_path
     mix_original_audio_path: Path | None = None
@@ -710,4 +694,30 @@ def _fit_speech_to_timing(
             transcript=fitted_transcript,
             fitted_transcript_path=fitted_transcript_path,
             fitted_speech_dir=fitted_speech_dir,
+        )
+
+
+def _align_speech_track(
+    context: DubRunContext,
+    speech_timeline_transcript: Transcript,
+) -> Path:
+    speech_track_path = context.artifact_paths.speech_track_path
+
+    if context.options.resume and reusable_file(speech_track_path):
+        _progress_skipped(
+            context.progress_callback,
+            "align_speech",
+            f"Using existing speech track: {speech_track_path}.",
+        )
+        return speech_track_path
+
+    with _progress_stage(
+        context.progress_callback,
+        "align_speech",
+        "Building timed speech track.",
+    ):
+        return build_speech_timeline(
+            speech_timeline_transcript,
+            output_path=speech_track_path,
+            sample_rate=context.options.speech_sample_rate,
         )
