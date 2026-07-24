@@ -262,32 +262,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     adapted_transcript = _adapt_translated_text(context, translated_transcript)
 
-    synthesized_transcript = (
-        load_reusable_synthesized_transcript(synthesized_transcript_path)
-        if resume
-        else None
-    )
-
-    if synthesized_transcript is not None:
-        _progress_skipped(
-            progress_callback,
-            "synthesize",
-            f"Using existing synthesized speech: {synthesized_transcript_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "synthesize",
-            "Synthesizing speech clips.",
-        ):
-            synthesized_transcript = synthesize_transcript_speech(
-                adapted_transcript,
-                adapter=tts_adapter,
-                output_dir=speech_dir,
-                language=target_language,
-                sample_rate=speech_sample_rate,
-            )
-            save_transcript(synthesized_transcript, synthesized_transcript_path)
+    synthesized_transcript = _synthesize_speech(context, adapted_transcript)
 
     fitted_transcript_path: Path | None = None
     fitted_speech_dir: Path | None = None
@@ -675,3 +650,39 @@ def _adapt_translated_text(
         )
         save_transcript(adapted_transcript, adapted_transcript_path)
         return adapted_transcript
+
+
+def _synthesize_speech(
+    context: DubRunContext,
+    adapted_transcript: Transcript,
+) -> Transcript:
+    synthesized_transcript_path = context.artifact_paths.synthesized_transcript_path
+
+    synthesized_transcript = (
+        load_reusable_synthesized_transcript(synthesized_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if synthesized_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "synthesize",
+            f"Using existing synthesized speech: {synthesized_transcript_path}.",
+        )
+        return synthesized_transcript
+
+    with _progress_stage(
+        context.progress_callback,
+        "synthesize",
+        "Synthesizing speech clips.",
+    ):
+        synthesized_transcript = synthesize_transcript_speech(
+            adapted_transcript,
+            adapter=context.adapters.tts,
+            output_dir=context.artifact_paths.speech_dir,
+            language=context.options.target_language,
+            sample_rate=context.options.speech_sample_rate,
+        )
+        save_transcript(synthesized_transcript, synthesized_transcript_path)
+        return synthesized_transcript
