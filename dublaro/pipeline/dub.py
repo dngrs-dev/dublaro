@@ -259,32 +259,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     source_transcript = _transcribe_source_audio(context, extracted_audio_path)
 
-    translated_transcript = (
-        load_reusable_transcript(translated_transcript_path) if resume else None
-    )
-
-    if translated_transcript is not None:
-        _progress_skipped(
-            progress_callback,
-            "translate",
-            f"Using existing translated transcript: {translated_transcript_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "translate",
-            f"Translating transcript to {target_language}.",
-        ):
-            translated_transcript = translate_transcript(
-                source_transcript,
-                adapter=translation_adapter,
-                target_language=target_language,
-                source_language=source_language,
-                group_segments=translation_group_segments,
-                max_group_pause_seconds=max_translation_group_pause_seconds,
-                max_group_duration_seconds=max_translation_group_duration_seconds,
-            )
-            save_transcript(translated_transcript, translated_transcript_path)
+    translated_transcript = _translate_source_transcript(context, source_transcript)
 
     adapted_transcript = (
         load_reusable_transcript(adapted_transcript_path) if resume else None
@@ -646,3 +621,45 @@ def _transcribe_source_audio(
         )
         save_transcript(source_transcript, source_transcript_path)
         return source_transcript
+
+
+def _translate_source_transcript(
+    context: DubRunContext,
+    source_transcript: Transcript,
+) -> Transcript:
+    translated_transcript_path = context.artifact_paths.translated_transcript_path
+
+    translated_transcript = (
+        load_reusable_transcript(translated_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if translated_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "translate",
+            f"Using existing translated transcript: {translated_transcript_path}.",
+        )
+        return translated_transcript
+
+    with _progress_stage(
+        context.progress_callback,
+        "translate",
+        f"Translating transcript to {context.options.target_language}.",
+    ):
+        translated_transcript = translate_transcript(
+            source_transcript,
+            adapter=context.adapters.translation,
+            target_language=context.options.target_language,
+            source_language=context.options.source_language,
+            group_segments=context.options.translation_group_segments,
+            max_group_pause_seconds=(
+                context.options.max_translation_group_pause_seconds
+            ),
+            max_group_duration_seconds=(
+                context.options.max_translation_group_duration_seconds
+            ),
+        )
+        save_transcript(translated_transcript, translated_transcript_path)
+        return translated_transcript
