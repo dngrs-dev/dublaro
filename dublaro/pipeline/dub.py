@@ -12,7 +12,12 @@ from dublaro.adapters.tts import TtsAdapter
 from dublaro.audio.ffmpeg import extract_audio_from_video
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
-from dublaro.pipeline.dub_plan import DubAdapters, DubOptions, DubPaths
+from dublaro.pipeline.dub_plan import (
+    DubAdapters,
+    DubArtifactPaths,
+    DubOptions,
+    DubPaths,
+)
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
 from dublaro.pipeline.manifest import (
@@ -72,6 +77,15 @@ DubbingProgressCallback = Callable[
     [DubbingProgressStep, DubbingProgressStatus, str],
     None,
 ]
+
+
+@dataclass(frozen=True)
+class DubRunContext:
+    paths: DubPaths
+    options: DubOptions
+    adapters: DubAdapters
+    artifact_paths: DubArtifactPaths
+    progress_callback: DubbingProgressCallback | None = None
 
 
 @contextmanager
@@ -179,23 +193,25 @@ def dub_video(
         tts=tts_adapter,
     )
 
-    return _run_dub_video(
+    context = DubRunContext(
         paths=paths,
         options=options,
         adapters=adapters,
+        artifact_paths=paths.artifacts(options),
         progress_callback=progress_callback,
     )
 
+    return _run_dub_video(context)
 
-def _run_dub_video(
-    *,
-    paths: DubPaths,
-    options: DubOptions,
-    adapters: DubAdapters,
-    progress_callback: DubbingProgressCallback | None = None,
-) -> DubbingArtifacts:
+
+def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     started_at = datetime.now(UTC)
-    artifact_paths = paths.artifacts(options)
+
+    paths = context.paths
+    options = context.options
+    adapters = context.adapters
+    artifact_paths = context.artifact_paths
+    progress_callback = context.progress_callback
 
     video_file = paths.video_path
     output_file = paths.output_path
