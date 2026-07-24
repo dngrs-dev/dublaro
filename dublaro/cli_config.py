@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
 from dublaro.config import LoadedConfig, resolve_config_path
 from dublaro.pipeline.export import default_dubbed_video_path
 
@@ -131,6 +132,33 @@ def _required_text(
     return value
 
 
+def _resolve_speech_sample_rate(
+    *,
+    cli_value: int | None,
+    config_value: int | None,
+    tts_backend: str,
+    piper_model_path: Path | None,
+    piper_config_path: Path | None,
+    default: int = 24_000,
+) -> int:
+    configured_value = _select_optional(cli_value, config_value)
+    if configured_value is not None:
+        return configured_value
+
+    if tts_backend != "piper":
+        return default
+
+    metadata_path = piper_config_path
+    if metadata_path is None and piper_model_path is not None:
+        metadata_path = default_piper_config_path(piper_model_path)
+
+    if metadata_path is None:
+        return default
+
+    detected_sample_rate = read_piper_sample_rate(metadata_path)
+    return detected_sample_rate if detected_sample_rate is not None else default
+
+
 def resolve_dub_settings(
     *,
     video_path: Path,
@@ -169,6 +197,28 @@ def resolve_dub_settings(
         or default_workspace_dir
     )
 
+    tts_backend = _select(overrides.tts_backend, config.tts.backend, "fake")
+
+    piper_model_path = _select_path(
+        overrides.piper_model_path,
+        config.tts.piper_model_path,
+        base_dir,
+    )
+
+    piper_config_path = _select_path(
+        overrides.piper_config_path,
+        config.tts.piper_config_path,
+        base_dir,
+    )
+
+    speech_sample_rate = _resolve_speech_sample_rate(
+        cli_value=overrides.speech_sample_rate,
+        config_value=config.speech_sample_rate,
+        tts_backend=tts_backend,
+        piper_model_path=piper_model_path,
+        piper_config_path=piper_config_path,
+    )
+
     return ResolvedDubSettings(
         source_language=_select_optional(
             overrides.source_language,
@@ -188,11 +238,7 @@ def resolve_dub_settings(
         asr_sample_rate=_select(
             overrides.asr_sample_rate, config.asr_sample_rate, 16000
         ),
-        speech_sample_rate=_select(
-            overrides.speech_sample_rate,
-            config.speech_sample_rate,
-            24000,
-        ),
+        speech_sample_rate=speech_sample_rate,
         asr_backend=_select(overrides.asr_backend, config.asr.backend, "fake"),
         model_size=_select(overrides.model_size, config.asr.model_size, "small"),
         device=_select(overrides.device, config.asr.device, "cpu"),
@@ -227,17 +273,9 @@ def resolve_dub_settings(
             config.text_adapter.backend,
             "rules",
         ),
-        tts_backend=_select(overrides.tts_backend, config.tts.backend, "fake"),
-        piper_model_path=_select_path(
-            overrides.piper_model_path,
-            config.tts.piper_model_path,
-            base_dir,
-        ),
-        piper_config_path=_select_path(
-            overrides.piper_config_path,
-            config.tts.piper_config_path,
-            base_dir,
-        ),
+        tts_backend=tts_backend,
+        piper_model_path=piper_model_path,
+        piper_config_path=piper_config_path,
         piper_executable=_select(
             overrides.piper_executable,
             config.tts.piper_executable,

@@ -1109,3 +1109,75 @@ preflight = false
 
     assert result.exit_code == 0
     assert calls[0]["output_path"] == tmp_path / "zoo.pl.dubbed.mp4"
+
+
+def test_dub_command_detects_piper_sample_rate_from_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "zoo.mp4"
+    video_path.write_bytes(b"fake video")
+
+    model_dir = tmp_path / "models" / "piper"
+    model_dir.mkdir(parents=True)
+
+    model_path = model_dir / "voice.onnx"
+    piper_config_path = model_dir / "voice.onnx.json"
+
+    model_path.write_bytes(b"fake model")
+    piper_config_path.write_text(
+        '{"audio": {"sample_rate": 22050}}',
+        encoding="utf-8",
+    )
+
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+preflight = false
+
+[dub.tts]
+backend = "piper"
+piper_model_path = "models/piper/voice.onnx"
+piper_config_path = "models/piper/voice.onnx.json"
+""",
+        encoding="utf-8",
+    )
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+
+        workspace_dir = kwargs["workspace_dir"]
+        assert isinstance(workspace_dir, Path)
+
+        return FakeArtifacts(
+            dubbed_video_path=output_path,
+            workspace_dir=workspace_dir,
+        )
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        ["dub", str(video_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["speech_sample_rate"] == 22050

@@ -44,8 +44,10 @@ class PiperTtsAdapter:
         if self.config_path is not None and not self.config_path.exists():
             raise FileNotFoundError(f"Piper config does not exist: {self.config_path}")
 
-        config_for_metadata = self.config_path or Path(f"{self.model_path}.json")
-        self.model_sample_rate = _read_piper_sample_rate(config_for_metadata)
+        config_for_metadata = self.config_path or default_piper_config_path(
+            self.model_path
+        )
+        self.model_sample_rate = read_piper_sample_rate(config_for_metadata)
 
     def synthesize_segment(
         self,
@@ -114,19 +116,35 @@ def _segment_text(segment: Segment) -> str:
     return segment.adapted_text or segment.translated_text or segment.source_text
 
 
-def _read_piper_sample_rate(config_path: Path) -> int | None:
-    if not config_path.exists():
+def default_piper_config_path(model_path: str | Path) -> Path:
+    return Path(f"{Path(model_path)}.json")
+
+
+def read_piper_sample_rate(config_path: str | Path) -> int | None:
+    config_file = Path(config_path)
+
+    if not config_file.exists():
         return None
 
-    data = json.loads(config_path.read_text(encoding="utf-8"))
-    audio = data.get("audio")
+    try:
+        data = json.loads(config_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid Piper config JSON: {config_file}") from error
 
+    if not isinstance(data, dict):
+        return None
+
+    audio = data.get("audio")
     if not isinstance(audio, dict):
         return None
 
     sample_rate = audio.get("sample_rate")
+    if sample_rate is None:
+        return None
 
-    if isinstance(sample_rate, int):
+    if isinstance(sample_rate, int) and not isinstance(sample_rate, bool):
         return sample_rate
 
-    return None
+    raise ValueError(
+        f"Piper config audio.sample_rate must be an integer: {config_file}"
+    )

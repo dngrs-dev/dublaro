@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 from dublaro.adapters.tts.base import SpeechSynthesisOptions
-from dublaro.adapters.tts.piper import PiperTtsAdapter
+from dublaro.adapters.tts.piper import (
+    PiperTtsAdapter,
+    default_piper_config_path,
+    read_piper_sample_rate,
+)
 from dublaro.schemas import Segment
 
 
@@ -113,3 +117,16 @@ def test_piper_tts_adapter_reports_missing_executable(tmp_path: Path) -> None:
             tmp_path / "speech.wav",
             options=SpeechSynthesisOptions(language="en", sample_rate=24000),
         )
+
+
+def test_default_piper_config_path_uses_model_json_suffix(tmp_path: Path) -> None:
+    model_path = tmp_path / "voice.onnx"
+
+    assert default_piper_config_path(model_path) == tmp_path / "voice.onnx.json"
+
+
+def test_read_piper_sample_rate_reads_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "voice.onnx.json"
+    config_path.write_text('{"audio": {"sample_rate": 22050}}', encoding="utf-8")
+
+    assert read_piper_sample_rate(config_path) == 22050
