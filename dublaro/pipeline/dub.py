@@ -295,21 +295,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     dubbed_video_path = _export_video(context, audio_for_export_path)
 
-    srt_path: Path | None = None
-
-    if export_srt:
-        resolved_srt_path = artifact_paths.srt_path
-
-        with _progress_stage(
-            progress_callback,
-            "export_srt",
-            "Exporting SRT subtitles.",
-        ):
-            srt_path = save_srt(
-                speech_timeline_transcript,
-                resolved_srt_path,
-                text_mode=srt_text_mode,
-            )
+    srt_path = _export_srt(context, speech_timeline_transcript)
 
     manifest_path: Path | None = None
 
@@ -753,4 +739,23 @@ def _export_video(
             context.paths.output_path,
             overwrite=context.options.overwrite,
             executable=context.options.ffmpeg_executable,
+        )
+
+
+def _export_srt(
+    context: DubRunContext,
+    speech_timeline_transcript: Transcript,
+) -> Path | None:
+    if not context.options.export_srt:
+        return None
+
+    with _progress_stage(
+        context.progress_callback,
+        "export_srt",
+        "Exporting SRT subtitles.",
+    ):
+        return save_srt(
+            speech_timeline_transcript,
+            context.artifact_paths.srt_path,
+            text_mode=context.options.srt_text_mode,
         )
