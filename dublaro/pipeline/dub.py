@@ -96,6 +96,13 @@ class SpeechTimingResult:
     fitted_speech_dir: Path | None = None
 
 
+@dataclass(frozen=True)
+class ExportAudioResult:
+    audio_path: Path
+    mix_original_audio_path: Path | None = None
+    mixed_audio_path: Path | None = None
+
+
 @contextmanager
 def _progress_stage(
     callback: DubbingProgressCallback | None,
@@ -278,59 +285,14 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     speech_track_path = _align_speech_track(context, speech_timeline_transcript)
 
-    audio_for_export_path = speech_track_path
-    mix_original_audio_path: Path | None = None
-    mixed_audio_path: Path | None = None
-
-    if mix_original_audio:
-        original_mix_path = artifact_paths.mix_original_audio_path
-        mixed_path = artifact_paths.mixed_audio_path
-
-        mix_original_audio_path = original_mix_path
-        mixed_audio_path = mixed_path
-
-        if resume and reusable_file(mixed_path):
-            audio_for_export_path = mixed_path
-            _progress_skipped(
-                progress_callback,
-                "mix_original_audio",
-                f"Using existing mixed audio: {mixed_path}.",
-            )
-        else:
-            with _progress_stage(
-                progress_callback,
-                "mix_original_audio",
-                "Mixing dubbed speech over original audio.",
-            ):
-                if resume and reusable_file(original_mix_path):
-                    _progress_skipped(
-                        progress_callback,
-                        "mix_original_audio",
-                        f"Using existing original mix audio: {original_mix_path}.",
-                    )
-                else:
-                    mix_original_audio_path = extract_audio_from_video(
-                        video_file,
-                        original_mix_path,
-                        sample_rate=speech_sample_rate,
-                        channels=1,
-                        overwrite=overwrite,
-                        executable=ffmpeg_executable,
-                    )
-
-                mixed_audio_path = mix_original_audio_with_dubbed_speech(
-                    speech_timeline_transcript,
-                    original_audio_path=mix_original_audio_path,
-                    speech_track_path=speech_track_path,
-                    output_path=mixed_path,
-                    original_gain=original_audio_gain,
-                    ducking_gain=ducking_gain,
-                    speech_gain=speech_gain,
-                    ducking_margin_seconds=ducking_margin_seconds,
-                    ducking_fade_seconds=ducking_fade_seconds,
-                )
-
-                audio_for_export_path = mixed_audio_path
+    export_audio = _prepare_audio_for_export(
+        context,
+        speech_timeline_transcript,
+        speech_track_path,
+    )
+    audio_for_export_path = export_audio.audio_path
+    mix_original_audio_path = export_audio.mix_original_audio_path
+    mixed_audio_path = export_audio.mixed_audio_path
 
     with _progress_stage(
         progress_callback,
@@ -720,4 +682,69 @@ def _align_speech_track(
             speech_timeline_transcript,
             output_path=speech_track_path,
             sample_rate=context.options.speech_sample_rate,
+        )
+
+
+def _prepare_audio_for_export(
+    context: DubRunContext,
+    speech_timeline_transcript: Transcript,
+    speech_track_path: Path,
+) -> ExportAudioResult:
+    if not context.options.mix_original_audio:
+        return ExportAudioResult(audio_path=speech_track_path)
+
+    original_mix_path = context.artifact_paths.mix_original_audio_path
+    mixed_path = context.artifact_paths.mixed_audio_path
+
+    if context.options.resume and reusable_file(mixed_path):
+        _progress_skipped(
+            context.progress_callback,
+            "mix_original_audio",
+            f"Using existing mixed audio: {mixed_path}.",
+        )
+        return ExportAudioResult(
+            audio_path=mixed_path,
+            mix_original_audio_path=original_mix_path,
+            mixed_audio_path=mixed_path,
+        )
+
+    with _progress_stage(
+        context.progress_callback,
+        "mix_original_audio",
+        "Mixing dubbed speech over original audio.",
+    ):
+        mix_original_audio_path = original_mix_path
+
+        if context.options.resume and reusable_file(original_mix_path):
+            _progress_skipped(
+                context.progress_callback,
+                "mix_original_audio",
+                f"Using existing original mix audio: {original_mix_path}.",
+            )
+        else:
+            mix_original_audio_path = extract_audio_from_video(
+                context.paths.video_path,
+                original_mix_path,
+                sample_rate=context.options.speech_sample_rate,
+                channels=1,
+                overwrite=context.options.overwrite,
+                executable=context.options.ffmpeg_executable,
+            )
+
+        mixed_audio_path = mix_original_audio_with_dubbed_speech(
+            speech_timeline_transcript,
+            original_audio_path=mix_original_audio_path,
+            speech_track_path=speech_track_path,
+            output_path=mixed_path,
+            original_gain=context.options.original_audio_gain,
+            ducking_gain=context.options.ducking_gain,
+            speech_gain=context.options.speech_gain,
+            ducking_margin_seconds=context.options.ducking_margin_seconds,
+            ducking_fade_seconds=context.options.ducking_fade_seconds,
+        )
+
+        return ExportAudioResult(
+            audio_path=mixed_audio_path,
+            mix_original_audio_path=mix_original_audio_path,
+            mixed_audio_path=mixed_audio_path,
         )
