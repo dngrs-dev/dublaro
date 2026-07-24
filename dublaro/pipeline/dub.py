@@ -219,7 +219,6 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     workspace = paths.workspace_dir
     workspace.mkdir(parents=True, exist_ok=True)
 
-    source_language = options.source_language
     target_language = options.target_language
     asr_sample_rate = options.asr_sample_rate
     speech_sample_rate = options.speech_sample_rate
@@ -261,29 +260,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     translated_transcript = _translate_source_transcript(context, source_transcript)
 
-    adapted_transcript = (
-        load_reusable_transcript(adapted_transcript_path) if resume else None
-    )
-
-    if adapted_transcript is not None:
-        _progress_skipped(
-            progress_callback,
-            "adapt_text",
-            f"Using existing adapted transcript: {adapted_transcript_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "adapt_text",
-            "Adapting translated text for timing.",
-        ):
-            adapted_transcript = adapt_transcript_text(
-                translated_transcript,
-                adapter=text_adapter,
-                target_language=target_language,
-                source_language=source_language,
-            )
-            save_transcript(adapted_transcript, adapted_transcript_path)
+    adapted_transcript = _adapt_translated_text(context, translated_transcript)
 
     synthesized_transcript = (
         load_reusable_synthesized_transcript(synthesized_transcript_path)
@@ -663,3 +640,38 @@ def _translate_source_transcript(
         )
         save_transcript(translated_transcript, translated_transcript_path)
         return translated_transcript
+
+
+def _adapt_translated_text(
+    context: DubRunContext,
+    translated_transcript: Transcript,
+) -> Transcript:
+    adapted_transcript_path = context.artifact_paths.adapted_transcript_path
+
+    adapted_transcript = (
+        load_reusable_transcript(adapted_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if adapted_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "adapt_text",
+            f"Using existing adapted transcript: {adapted_transcript_path}.",
+        )
+        return adapted_transcript
+
+    with _progress_stage(
+        context.progress_callback,
+        "adapt_text",
+        "Adapting translated text for timing.",
+    ):
+        adapted_transcript = adapt_transcript_text(
+            translated_transcript,
+            adapter=context.adapters.text_adapter,
+            target_language=context.options.target_language,
+            source_language=context.options.source_language,
+        )
+        save_transcript(adapted_transcript, adapted_transcript_path)
+        return adapted_transcript
