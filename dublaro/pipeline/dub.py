@@ -229,7 +229,6 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     progress_callback = context.progress_callback
 
     video_file = paths.video_path
-    output_file = paths.output_path
     workspace = paths.workspace_dir
     workspace.mkdir(parents=True, exist_ok=True)
 
@@ -294,18 +293,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     mix_original_audio_path = export_audio.mix_original_audio_path
     mixed_audio_path = export_audio.mixed_audio_path
 
-    with _progress_stage(
-        progress_callback,
-        "export_video",
-        "Exporting dubbed video.",
-    ):
-        dubbed_video_path = export_dubbed_video(
-            video_file,
-            audio_for_export_path,
-            output_file,
-            overwrite=overwrite,
-            executable=ffmpeg_executable,
-        )
+    dubbed_video_path = _export_video(context, audio_for_export_path)
 
     srt_path: Path | None = None
 
@@ -747,4 +735,22 @@ def _prepare_audio_for_export(
             audio_path=mixed_audio_path,
             mix_original_audio_path=mix_original_audio_path,
             mixed_audio_path=mixed_audio_path,
+        )
+
+
+def _export_video(
+    context: DubRunContext,
+    audio_for_export_path: Path,
+) -> Path:
+    with _progress_stage(
+        context.progress_callback,
+        "export_video",
+        "Exporting dubbed video.",
+    ):
+        return export_dubbed_video(
+            context.paths.video_path,
+            audio_for_export_path,
+            context.paths.output_path,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
         )
