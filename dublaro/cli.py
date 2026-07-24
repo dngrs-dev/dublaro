@@ -1175,6 +1175,13 @@ def dub(
             help="Output dubbed video path.",
         ),
     ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Directory for the output dubbed video.",
+        ),
+    ] = None,
     source_language: Annotated[
         str | None,
         typer.Option(
@@ -1445,6 +1452,7 @@ def dub(
                 source_language=source_language,
                 target_language=target_language,
                 output_path=output_path,
+                output_dir=output_dir,
                 workspace_dir=workspace_dir,
                 resume=resume_enabled,
                 overwrite=overwrite,

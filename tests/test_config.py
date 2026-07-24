@@ -60,3 +60,19 @@ def test_resolve_config_path_keeps_absolute_path(tmp_path: Path) -> None:
     absolute_path = tmp_path / "video.mp4"
 
     assert resolve_config_path(absolute_path, tmp_path / "other") == absolute_path
+
+
+def test_load_config_rejects_output_path_with_output_dir(tmp_path: Path) -> None:
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+output_path = "exact.mp4"
+output_dir = "out"
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DublaroConfigError, match="output_path"):
+        load_config(config_path)

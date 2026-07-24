@@ -1181,3 +1181,78 @@ piper_config_path = "models/piper/voice.onnx.json"
 
     assert result.exit_code == 0
     assert calls[0]["speech_sample_rate"] == 22050
+
+
+def test_dub_command_uses_output_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "input" / "zoo.mp4"
+    output_dir = tmp_path / "output"
+    video_path.parent.mkdir()
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake dubbed video")
+
+        workspace_dir = kwargs["workspace_dir"]
+        assert isinstance(workspace_dir, Path)
+
+        return FakeArtifacts(output_path, workspace_dir)
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output-dir",
+            str(output_dir),
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["output_path"] == output_dir / "zoo.pl.dubbed.mp4"
+
+
+def test_dub_command_rejects_output_with_output_dir(tmp_path: Path) -> None:
+    video_path = tmp_path / "zoo.mp4"
+    video_path.write_bytes(b"fake video")
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(tmp_path / "exact.mp4"),
+            "--output-dir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--output cannot be used with --output-dir" in result.output

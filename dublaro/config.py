@@ -2,7 +2,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from dublaro.pipeline.subtitles import SrtTextMode
 
@@ -86,6 +86,7 @@ class DubConfig(BaseModel):
     source_language: str | None = None
     target_language: str | None = None
     output_path: Path | None = None
+    output_dir: Path | None = None
     workspace_dir: Path | None = None
     resume: bool | None = None
     overwrite: bool | None = None
@@ -102,6 +103,12 @@ class DubConfig(BaseModel):
     mix: MixConfig = MixConfig()
     srt: SrtConfig = SrtConfig()
     manifest: ManifestConfig = ManifestConfig()
+
+    @model_validator(mode="after")
+    def validate_output_settings(self) -> "DubConfig":
+        if self.output_path is not None and self.output_dir is not None:
+            raise ValueError("dub.output_path and dub.output_dir cannot both be set.")
+        return self
 
 
 class DublaroConfig(BaseModel):

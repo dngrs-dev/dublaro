@@ -4,7 +4,10 @@ from typing import TypeVar
 
 from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
 from dublaro.config import LoadedConfig, resolve_config_path
-from dublaro.pipeline.export import default_dubbed_video_path
+from dublaro.pipeline.export import (
+    default_dubbed_video_path,
+    default_dubbed_video_path_in_dir,
+)
 
 T = TypeVar("T")
 
@@ -14,6 +17,7 @@ class DubCliOverrides:
     source_language: str | None = None
     target_language: str | None = None
     output_path: Path | None = None
+    output_dir: Path | None = None
     workspace_dir: Path | None = None
     resume: bool | None = None
     overwrite: bool | None = None
@@ -132,6 +136,44 @@ def _required_text(
     return value
 
 
+def _resolve_output_path(
+    *,
+    video_path: Path,
+    target_language: str,
+    cli_output_path: Path | None,
+    cli_output_dir: Path | None,
+    config_output_path: Path | None,
+    config_output_dir: Path | None,
+    base_dir: Path | None,
+) -> Path:
+    if cli_output_path is not None and cli_output_dir is not None:
+        raise ValueError("--output cannot be used with --output-dir.")
+
+    if cli_output_path is not None:
+        return cli_output_path
+
+    if cli_output_dir is not None:
+        return default_dubbed_video_path_in_dir(
+            video_path,
+            target_language,
+            cli_output_dir,
+        )
+
+    resolved_config_output_path = resolve_config_path(config_output_path, base_dir)
+    if resolved_config_output_path is not None:
+        return resolved_config_output_path
+
+    resolved_config_output_dir = resolve_config_path(config_output_dir, base_dir)
+    if resolved_config_output_dir is not None:
+        return default_dubbed_video_path_in_dir(
+            video_path,
+            target_language,
+            resolved_config_output_dir,
+        )
+
+    return default_dubbed_video_path(video_path, target_language)
+
+
 def _resolve_speech_sample_rate(
     *,
     cli_value: int | None,
@@ -175,15 +217,14 @@ def resolve_dub_settings(
         config.target_language,
     )
 
-    default_output_path = default_dubbed_video_path(video_path, target_language)
-    output_path = (
-        _select_path(
-            overrides.output_path,
-            config.output_path,
-            base_dir,
-            default_output_path,
-        )
-        or default_output_path
+    output_path = _resolve_output_path(
+        video_path=video_path,
+        target_language=target_language,
+        cli_output_path=overrides.output_path,
+        cli_output_dir=overrides.output_dir,
+        config_output_path=config.output_path,
+        config_output_dir=config.output_dir,
+        base_dir=base_dir,
     )
 
     default_workspace_dir = Path(".dublaro") / video_path.stem

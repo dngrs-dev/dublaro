@@ -20,8 +20,21 @@ def export_dubbed_video(
     )
 
 
+def default_dubbed_video_filename(video_path: str | Path, target_language: str) -> str:
+    video_file = Path(video_path)
+    return f"{video_file.stem}.{target_language}.dubbed{video_file.suffix}"
+
+
 def default_dubbed_video_path(video_path: str | Path, target_language: str) -> Path:
     video_file = Path(video_path)
     return video_file.with_name(
-        f"{video_file.stem}.{target_language}.dubbed{video_file.suffix}"
+        default_dubbed_video_filename(video_file, target_language)
     )
+
+
+def default_dubbed_video_path_in_dir(
+    video_path: str | Path,
+    target_language: str,
+    output_dir: str | Path,
+) -> Path:
+    return Path(output_dir) / default_dubbed_video_filename(video_path, target_language)
