@@ -89,6 +89,13 @@ class DubRunContext:
     progress_callback: DubbingProgressCallback | None = None
 
 
+@dataclass(frozen=True)
+class SpeechTimingResult:
+    transcript: Transcript
+    fitted_transcript_path: Path | None = None
+    fitted_speech_dir: Path | None = None
+
+
 @contextmanager
 def _progress_stage(
     callback: DubbingProgressCallback | None,
@@ -264,42 +271,10 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     synthesized_transcript = _synthesize_speech(context, adapted_transcript)
 
-    fitted_transcript_path: Path | None = None
-    fitted_speech_dir: Path | None = None
-    speech_timeline_transcript = synthesized_transcript
-
-    if fit_speech:
-        fitted_transcript_path = artifact_paths.fitted_transcript_path
-        fitted_speech_dir = artifact_paths.fitted_speech_dir
-
-        reusable_fitted_transcript = (
-            load_reusable_synthesized_transcript(fitted_transcript_path)
-            if resume
-            else None
-        )
-
-        if reusable_fitted_transcript is not None:
-            speech_timeline_transcript = reusable_fitted_transcript
-            _progress_skipped(
-                progress_callback,
-                "fit_speech",
-                f"Using existing fitted transcript: {fitted_transcript_path}.",
-            )
-        else:
-            with _progress_stage(
-                progress_callback,
-                "fit_speech",
-                "Fitting overlong speech clips to segment timing.",
-            ):
-                speech_timeline_transcript = fit_generated_speech_to_segments(
-                    synthesized_transcript,
-                    output_dir=fitted_speech_dir,
-                    max_speedup=max_speech_speedup,
-                    min_overrun_seconds=min_speech_overrun_seconds,
-                    overwrite=overwrite,
-                    executable=ffmpeg_executable,
-                )
-                save_transcript(speech_timeline_transcript, fitted_transcript_path)
+    speech_timing = _fit_speech_to_timing(context, synthesized_transcript)
+    speech_timeline_transcript = speech_timing.transcript
+    fitted_transcript_path = speech_timing.fitted_transcript_path
+    fitted_speech_dir = speech_timing.fitted_speech_dir
 
     if resume and reusable_file(speech_track_path):
         _progress_skipped(
@@ -686,3 +661,53 @@ def _synthesize_speech(
         )
         save_transcript(synthesized_transcript, synthesized_transcript_path)
         return synthesized_transcript
+
+
+def _fit_speech_to_timing(
+    context: DubRunContext,
+    synthesized_transcript: Transcript,
+) -> SpeechTimingResult:
+    if not context.options.fit_speech:
+        return SpeechTimingResult(transcript=synthesized_transcript)
+
+    fitted_transcript_path = context.artifact_paths.fitted_transcript_path
+    fitted_speech_dir = context.artifact_paths.fitted_speech_dir
+
+    reusable_fitted_transcript = (
+        load_reusable_synthesized_transcript(fitted_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if reusable_fitted_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "fit_speech",
+            f"Using existing fitted transcript: {fitted_transcript_path}.",
+        )
+        return SpeechTimingResult(
+            transcript=reusable_fitted_transcript,
+            fitted_transcript_path=fitted_transcript_path,
+            fitted_speech_dir=fitted_speech_dir,
+        )
+
+    with _progress_stage(
+        context.progress_callback,
+        "fit_speech",
+        "Fitting overlong speech clips to segment timing.",
+    ):
+        fitted_transcript = fit_generated_speech_to_segments(
+            synthesized_transcript,
+            output_dir=fitted_speech_dir,
+            max_speedup=context.options.max_speech_speedup,
+            min_overrun_seconds=context.options.min_speech_overrun_seconds,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
+        )
+        save_transcript(fitted_transcript, fitted_transcript_path)
+
+        return SpeechTimingResult(
+            transcript=fitted_transcript,
+            fitted_transcript_path=fitted_transcript_path,
+            fitted_speech_dir=fitted_speech_dir,
+        )
