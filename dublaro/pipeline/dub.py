@@ -248,34 +248,13 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     text_adapter = adapters.text_adapter
     tts_adapter = adapters.tts
 
-    extracted_audio_path = artifact_paths.extracted_audio_path
+    extracted_audio_path = _extract_audio(context)
     source_transcript_path = artifact_paths.source_transcript_path
     translated_transcript_path = artifact_paths.translated_transcript_path
     adapted_transcript_path = artifact_paths.adapted_transcript_path
     synthesized_transcript_path = artifact_paths.synthesized_transcript_path
     speech_dir = artifact_paths.speech_dir
     speech_track_path = artifact_paths.speech_track_path
-
-    if resume and reusable_file(extracted_audio_path):
-        _progress_skipped(
-            progress_callback,
-            "extract_audio",
-            f"Using existing extracted audio: {extracted_audio_path}.",
-        )
-    else:
-        with _progress_stage(
-            progress_callback,
-            "extract_audio",
-            "Extracting audio from video.",
-        ):
-            extracted_audio_path = extract_audio_from_video(
-                video_file,
-                extracted_audio_path,
-                sample_rate=asr_sample_rate,
-                channels=1,
-                overwrite=overwrite,
-                executable=ffmpeg_executable,
-            )
 
     source_transcript = (
         load_reusable_transcript(source_transcript_path) if resume else None
@@ -625,3 +604,29 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         srt_path=srt_path,
         manifest_path=manifest_path,
     )
+
+
+def _extract_audio(context: DubRunContext) -> Path:
+    extracted_audio_path = context.artifact_paths.extracted_audio_path
+
+    if context.options.resume and reusable_file(extracted_audio_path):
+        _progress_skipped(
+            context.progress_callback,
+            "extract_audio",
+            f"Using existing extracted audio: {extracted_audio_path}.",
+        )
+        return extracted_audio_path
+
+    with _progress_stage(
+        context.progress_callback,
+        "extract_audio",
+        "Extracting audio from video.",
+    ):
+        return extract_audio_from_video(
+            context.paths.video_path,
+            extracted_audio_path,
+            sample_rate=context.options.asr_sample_rate,
+            channels=1,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
+        )
