@@ -103,6 +103,29 @@ class ExportAudioResult:
     mixed_audio_path: Path | None = None
 
 
+@dataclass(frozen=True)
+class ManifestInputs:
+    started_at: datetime
+    extracted_audio_path: Path
+    source_transcript_path: Path
+    translated_transcript_path: Path
+    adapted_transcript_path: Path
+    synthesized_transcript_path: Path
+    speech_dir: Path
+    speech_track_path: Path
+    dubbed_video_path: Path
+    fitted_transcript_path: Path | None
+    fitted_speech_dir: Path | None
+    mix_original_audio_path: Path | None
+    mixed_audio_path: Path | None
+    srt_path: Path | None
+    source_transcript: Transcript
+    translated_transcript: Transcript
+    adapted_transcript: Transcript
+    synthesized_transcript: Transcript
+    speech_timeline_transcript: Transcript
+
+
 @contextmanager
 def _progress_stage(
     callback: DubbingProgressCallback | None,
@@ -222,44 +245,9 @@ def dub_video(
 def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     started_at = datetime.now(UTC)
 
-    paths = context.paths
-    options = context.options
-    adapters = context.adapters
     artifact_paths = context.artifact_paths
-    progress_callback = context.progress_callback
-
-    video_file = paths.video_path
-    workspace = paths.workspace_dir
+    workspace = context.paths.workspace_dir
     workspace.mkdir(parents=True, exist_ok=True)
-
-    target_language = options.target_language
-    asr_sample_rate = options.asr_sample_rate
-    speech_sample_rate = options.speech_sample_rate
-    fit_speech = options.fit_speech
-    max_speech_speedup = options.max_speech_speedup
-    min_speech_overrun_seconds = options.min_speech_overrun_seconds
-    mix_original_audio = options.mix_original_audio
-    original_audio_gain = options.original_audio_gain
-    ducking_gain = options.ducking_gain
-    speech_gain = options.speech_gain
-    ducking_margin_seconds = options.ducking_margin_seconds
-    ducking_fade_seconds = options.ducking_fade_seconds
-    translation_group_segments = options.translation_group_segments
-    max_translation_group_pause_seconds = options.max_translation_group_pause_seconds
-    max_translation_group_duration_seconds = (
-        options.max_translation_group_duration_seconds
-    )
-    export_srt = options.export_srt
-    srt_text_mode = options.srt_text_mode
-    write_manifest = options.write_manifest
-    ffmpeg_executable = options.ffmpeg_executable
-    resume = options.resume
-    overwrite = options.overwrite
-
-    asr_adapter = adapters.asr
-    translation_adapter = adapters.translation
-    text_adapter = adapters.text_adapter
-    tts_adapter = adapters.tts
 
     extracted_audio_path = _extract_audio(context)
     source_transcript_path = artifact_paths.source_transcript_path
@@ -297,97 +285,28 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     srt_path = _export_srt(context, speech_timeline_transcript)
 
-    manifest_path: Path | None = None
-
-    if write_manifest:
-        resolved_manifest_path = artifact_paths.manifest_path
-
-        with _progress_stage(
-            progress_callback,
-            "write_manifest",
-            "Writing run manifest.",
-        ):
-            finished_at = datetime.now(UTC)
-
-            manifest = build_dubbing_manifest(
-                started_at=started_at,
-                finished_at=finished_at,
-                input_video_path=video_file,
-                output_video_path=dubbed_video_path,
-                source_language=source_transcript.source_language,
-                target_language=target_language,
-                asr_adapter=asr_adapter,
-                translation_adapter=translation_adapter,
-                text_adapter=text_adapter,
-                tts_adapter=tts_adapter,
-                options=DubbingOptionsManifest(
-                    asr_sample_rate=asr_sample_rate,
-                    speech_sample_rate=speech_sample_rate,
-                    fit_speech=fit_speech,
-                    max_speech_speedup=max_speech_speedup,
-                    min_speech_overrun_seconds=min_speech_overrun_seconds,
-                    mix_original_audio=mix_original_audio,
-                    original_audio_gain=original_audio_gain,
-                    ducking_gain=ducking_gain,
-                    speech_gain=speech_gain,
-                    ducking_margin_seconds=ducking_margin_seconds,
-                    ducking_fade_seconds=ducking_fade_seconds,
-                    translation_group_segments=translation_group_segments,
-                    max_translation_group_pause_seconds=max_translation_group_pause_seconds,
-                    max_translation_group_duration_seconds=max_translation_group_duration_seconds,
-                    export_srt=export_srt,
-                    srt_text_mode=srt_text_mode,
-                    ffmpeg_executable=ffmpeg_executable,
-                    resume=resume,
-                    overwrite=overwrite,
-                ),
-                artifacts=DubbingArtifactsManifest(
-                    workspace_dir=str(workspace),
-                    extracted_audio_path=str(extracted_audio_path),
-                    source_transcript_path=str(source_transcript_path),
-                    translated_transcript_path=str(translated_transcript_path),
-                    adapted_transcript_path=str(adapted_transcript_path),
-                    synthesized_transcript_path=str(synthesized_transcript_path),
-                    speech_dir=str(speech_dir),
-                    speech_track_path=str(speech_track_path),
-                    dubbed_video_path=str(dubbed_video_path),
-                    fitted_transcript_path=(
-                        str(fitted_transcript_path)
-                        if fitted_transcript_path is not None
-                        else None
-                    ),
-                    fitted_speech_dir=(
-                        str(fitted_speech_dir)
-                        if fitted_speech_dir is not None
-                        else None
-                    ),
-                    mix_original_audio_path=(
-                        str(mix_original_audio_path)
-                        if mix_original_audio_path is not None
-                        else None
-                    ),
-                    mixed_audio_path=(
-                        str(mixed_audio_path) if mixed_audio_path is not None else None
-                    ),
-                    srt_path=str(srt_path) if srt_path is not None else None,
-                    manifest_path=str(resolved_manifest_path),
-                ),
-                metadata={
-                    "source_segment_count": str(len(source_transcript.segments)),
-                    "translated_segment_count": str(
-                        len(translated_transcript.segments)
-                    ),
-                    "adapted_segment_count": str(len(adapted_transcript.segments)),
-                    "synthesized_segment_count": str(
-                        len(synthesized_transcript.segments)
-                    ),
-                    "final_speech_segment_count": str(
-                        len(speech_timeline_transcript.segments)
-                    ),
-                },
-            )
-
-            manifest_path = save_manifest(manifest, resolved_manifest_path)
+    manifest_inputs = ManifestInputs(
+        started_at=started_at,
+        extracted_audio_path=extracted_audio_path,
+        source_transcript_path=source_transcript_path,
+        translated_transcript_path=translated_transcript_path,
+        adapted_transcript_path=adapted_transcript_path,
+        synthesized_transcript_path=synthesized_transcript_path,
+        speech_dir=speech_dir,
+        speech_track_path=speech_track_path,
+        dubbed_video_path=dubbed_video_path,
+        fitted_transcript_path=fitted_transcript_path,
+        fitted_speech_dir=fitted_speech_dir,
+        mix_original_audio_path=mix_original_audio_path,
+        mixed_audio_path=mixed_audio_path,
+        srt_path=srt_path,
+        source_transcript=source_transcript,
+        translated_transcript=translated_transcript,
+        adapted_transcript=adapted_transcript,
+        synthesized_transcript=synthesized_transcript,
+        speech_timeline_transcript=speech_timeline_transcript,
+    )
+    manifest_path = _write_manifest(context, manifest_inputs)
 
     return DubbingArtifacts(
         workspace_dir=workspace,
@@ -759,3 +678,107 @@ def _export_srt(
             context.artifact_paths.srt_path,
             text_mode=context.options.srt_text_mode,
         )
+
+
+def _write_manifest(
+    context: DubRunContext,
+    inputs: ManifestInputs,
+) -> Path | None:
+    if not context.options.write_manifest:
+        return None
+
+    run_options = context.options
+    artifacts = context.artifact_paths
+    adapters = context.adapters
+    resolved_manifest_path = artifacts.manifest_path
+
+    with _progress_stage(
+        context.progress_callback,
+        "write_manifest",
+        "Writing run manifest.",
+    ):
+        manifest = build_dubbing_manifest(
+            started_at=inputs.started_at,
+            finished_at=datetime.now(UTC),
+            input_video_path=context.paths.video_path,
+            output_video_path=inputs.dubbed_video_path,
+            source_language=inputs.source_transcript.source_language,
+            target_language=run_options.target_language,
+            asr_adapter=adapters.asr,
+            translation_adapter=adapters.translation,
+            text_adapter=adapters.text_adapter,
+            tts_adapter=adapters.tts,
+            options=DubbingOptionsManifest(
+                asr_sample_rate=run_options.asr_sample_rate,
+                speech_sample_rate=run_options.speech_sample_rate,
+                fit_speech=run_options.fit_speech,
+                max_speech_speedup=run_options.max_speech_speedup,
+                min_speech_overrun_seconds=run_options.min_speech_overrun_seconds,
+                mix_original_audio=run_options.mix_original_audio,
+                original_audio_gain=run_options.original_audio_gain,
+                ducking_gain=run_options.ducking_gain,
+                speech_gain=run_options.speech_gain,
+                ducking_margin_seconds=run_options.ducking_margin_seconds,
+                ducking_fade_seconds=run_options.ducking_fade_seconds,
+                translation_group_segments=run_options.translation_group_segments,
+                max_translation_group_pause_seconds=(
+                    run_options.max_translation_group_pause_seconds
+                ),
+                max_translation_group_duration_seconds=(
+                    run_options.max_translation_group_duration_seconds
+                ),
+                export_srt=run_options.export_srt,
+                srt_text_mode=run_options.srt_text_mode,
+                ffmpeg_executable=run_options.ffmpeg_executable,
+                resume=run_options.resume,
+                overwrite=run_options.overwrite,
+            ),
+            artifacts=DubbingArtifactsManifest(
+                workspace_dir=str(context.paths.workspace_dir),
+                extracted_audio_path=str(inputs.extracted_audio_path),
+                source_transcript_path=str(inputs.source_transcript_path),
+                translated_transcript_path=str(inputs.translated_transcript_path),
+                adapted_transcript_path=str(inputs.adapted_transcript_path),
+                synthesized_transcript_path=str(inputs.synthesized_transcript_path),
+                speech_dir=str(inputs.speech_dir),
+                speech_track_path=str(inputs.speech_track_path),
+                dubbed_video_path=str(inputs.dubbed_video_path),
+                fitted_transcript_path=(
+                    str(inputs.fitted_transcript_path)
+                    if inputs.fitted_transcript_path is not None
+                    else None
+                ),
+                fitted_speech_dir=(
+                    str(inputs.fitted_speech_dir)
+                    if inputs.fitted_speech_dir is not None
+                    else None
+                ),
+                mix_original_audio_path=(
+                    str(inputs.mix_original_audio_path)
+                    if inputs.mix_original_audio_path is not None
+                    else None
+                ),
+                mixed_audio_path=(
+                    str(inputs.mixed_audio_path)
+                    if inputs.mixed_audio_path is not None
+                    else None
+                ),
+                srt_path=str(inputs.srt_path) if inputs.srt_path is not None else None,
+                manifest_path=str(resolved_manifest_path),
+            ),
+            metadata={
+                "source_segment_count": str(len(inputs.source_transcript.segments)),
+                "translated_segment_count": str(
+                    len(inputs.translated_transcript.segments)
+                ),
+                "adapted_segment_count": str(len(inputs.adapted_transcript.segments)),
+                "synthesized_segment_count": str(
+                    len(inputs.synthesized_transcript.segments)
+                ),
+                "final_speech_segment_count": str(
+                    len(inputs.speech_timeline_transcript.segments)
+                ),
+            },
+        )
+
+        return save_manifest(manifest, resolved_manifest_path)
