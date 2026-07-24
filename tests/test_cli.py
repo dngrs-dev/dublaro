@@ -885,3 +885,172 @@ def test_dub_command_rejects_resume_with_overwrite(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "--resume cannot be used with --overwrite" in result.output
+
+
+def test_dub_command_reads_config_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake video")
+
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+source_language = "en"
+target_language = "pl"
+output_path = "out/video.pl.dubbed.mp4"
+workspace_dir = ".dublaro/video"
+resume = true
+preflight = false
+ffmpeg_executable = "ffmpeg-config"
+asr_sample_rate = 8000
+speech_sample_rate = 16000
+
+[dub.asr]
+backend = "fake"
+model_size = "tiny"
+device = "cpu"
+compute_type = "int8"
+
+[dub.translation]
+backend = "fake"
+group_segments = false
+max_group_pause_seconds = 0.4
+max_group_duration_seconds = 9.0
+
+[dub.text_adapter]
+backend = "fake"
+
+[dub.tts]
+backend = "fake"
+
+[dub.fit_speech]
+enabled = true
+max_speedup = 1.2
+min_overrun_seconds = 0.2
+
+[dub.mix]
+enabled = true
+original_audio_gain = 0.7
+ducking_gain = 0.3
+speech_gain = 1.1
+ducking_margin_seconds = 0.1
+ducking_fade_seconds = 0.2
+
+[dub.srt]
+export = true
+output_path = "subs/video.pl.srt"
+text_mode = "translated"
+
+[dub.manifest]
+write = true
+output_path = "runs/manifest.json"
+""",
+        encoding="utf-8",
+    )
+
+    calls: list[dict[str, object]] = []
+
+    class FakeArtifacts:
+        def __init__(self, dubbed_video_path: Path, workspace_dir: Path) -> None:
+            self.dubbed_video_path = dubbed_video_path
+            self.workspace_dir = workspace_dir
+            self.fitted_transcript_path = None
+            self.mixed_audio_path = None
+            self.srt_path = None
+            self.manifest_path = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        ["dub", str(video_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["target_language"] == "pl"
+    assert calls[0]["source_language"] == "en"
+    assert calls[0]["output_path"] == tmp_path / "out" / "video.pl.dubbed.mp4"
+    assert calls[0]["workspace_dir"] == tmp_path / ".dublaro" / "video"
+    assert calls[0]["resume"] is True
+    assert calls[0]["ffmpeg_executable"] == "ffmpeg-config"
+    assert calls[0]["asr_sample_rate"] == 8000
+    assert calls[0]["speech_sample_rate"] == 16000
+    assert calls[0]["translation_group_segments"] is False
+    assert calls[0]["fit_speech"] is True
+    assert calls[0]["mix_original_audio"] is True
+    assert calls[0]["srt_output_path"] == tmp_path / "subs" / "video.pl.srt"
+    assert calls[0]["srt_text_mode"] == "translated"
+    assert calls[0]["manifest_output_path"] == tmp_path / "runs" / "manifest.json"
+
+
+def test_dub_command_cli_values_override_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    cli_output_path = tmp_path / "cli-output.mp4"
+    video_path.write_bytes(b"fake video")
+
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+output_path = "config-output.mp4"
+preflight = false
+""",
+        encoding="utf-8",
+    )
+
+    calls: list[dict[str, object]] = []
+
+    class FakeArtifacts:
+        def __init__(self, dubbed_video_path: Path, workspace_dir: Path) -> None:
+            self.dubbed_video_path = dubbed_video_path
+            self.workspace_dir = workspace_dir
+            self.fitted_transcript_path = None
+            self.mixed_audio_path = None
+            self.srt_path = None
+            self.manifest_path = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--config",
+            str(config_path),
+            "--to",
+            "de",
+            "--output",
+            str(cli_output_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["target_language"] == "de"
+    assert calls[0]["output_path"] == cli_output_path

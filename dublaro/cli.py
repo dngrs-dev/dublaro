@@ -23,6 +23,8 @@ from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
 )
+from dublaro.cli_config import DubCliOverrides, resolve_dub_settings
+from dublaro.config import DublaroConfigError, load_config
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
     default_adapted_transcript_path,
@@ -1150,21 +1152,29 @@ def dub(
             help="Input video file.",
         ),
     ],
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to dublaro.toml config file.",
+        ),
+    ] = None,
     target_language: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--to",
             help="Target language code.",
         ),
-    ],
+    ] = None,
     output_path: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--output",
             "-o",
             help="Output dubbed video path.",
         ),
-    ],
+    ] = None,
     source_language: Annotated[
         str | None,
         typer.Option(
@@ -1180,103 +1190,103 @@ def dub(
         ),
     ] = None,
     resume_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--resume/--no-resume",
             help="Reuse valid intermediate workspace artifacts.",
         ),
-    ] = False,
+    ] = None,
     asr_backend: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--asr",
             help="ASR backend: fake or faster-whisper.",
         ),
-    ] = "fake",
+    ] = None,
     translation_backend: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--translator",
             help="Translation backend: fake or argos.",
         ),
-    ] = "fake",
+    ] = None,
     text_adapter_backend: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--text-adapter",
             help="Text adaptation backend: fake or rules.",
         ),
-    ] = "rules",
+    ] = None,
     tts_backend: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--tts",
             help="TTS backend: fake.",
         ),
-    ] = "fake",
+    ] = None,
     model_size: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--model",
             help="faster-whisper model size.",
         ),
-    ] = "small",
+    ] = None,
     device: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--device",
             help="Inference device: cpu or cuda.",
         ),
-    ] = "cpu",
+    ] = None,
     compute_type: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--compute-type",
             help="faster-whisper compute type.",
         ),
-    ] = "int8",
+    ] = None,
     install_package: Annotated[
-        bool,
+        bool | None,
         typer.Option(
-            "--install-package",
+            "--install-package/--no-install-package",
             help="Download and install translation package if missing.",
         ),
-    ] = False,
+    ] = None,
     translation_group_segments: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--group-segments/--no-group-segments",
             help="Translate nearby sentence fragments as one natural unit.",
         ),
-    ] = True,
+    ] = None,
     max_translation_group_pause_seconds: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--max-group-pause",
             help="Maximum pause between segments grouped for translation.",
         ),
-    ] = 0.8,
+    ] = None,
     max_translation_group_duration_seconds: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--max-group-duration",
             help="Maximum duration for one grouped translation unit.",
         ),
-    ] = 12.0,
+    ] = None,
     asr_sample_rate: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--asr-sample-rate",
             help="Audio sample rate used for ASR.",
         ),
-    ] = 16_000,
+    ] = None,
     speech_sample_rate: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--speech-sample-rate",
             help="Generated speech sample rate.",
         ),
-    ] = 24_000,
+    ] = None,
     piper_model_path: Annotated[
         Path | None,
         typer.Option(
@@ -1292,12 +1302,12 @@ def dub(
         ),
     ] = None,
     piper_executable: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--piper-executable",
             help="Piper executable name or path.",
         ),
-    ] = "piper",
+    ] = None,
     piper_speaker: Annotated[
         int | None,
         typer.Option(
@@ -1306,75 +1316,75 @@ def dub(
         ),
     ] = None,
     fit_speech_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--fit-speech/--no-fit-speech",
             help="Speed up overlong generated speech clips before alignment.",
         ),
-    ] = False,
+    ] = None,
     max_speech_speedup: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--max-speech-speedup",
             help="Maximum allowed audio speedup factor when fitting speech.",
         ),
-    ] = 1.35,
+    ] = None,
     min_speech_overrun_seconds: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--min-speech-overrun",
             help="Only fit clips longer than this tolerance.",
         ),
-    ] = 0.05,
+    ] = None,
     mix_original_audio_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--mix-original-audio/--no-mix-original-audio",
             help="Mix dubbed speech over lowered original audio.",
         ),
-    ] = False,
+    ] = None,
     original_audio_gain: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--original-audio-gain",
             help="Original audio volume multiplier outside dubbed speech.",
         ),
-    ] = 1.0,
+    ] = None,
     ducking_gain: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--ducking-gain",
             help="Original audio volume multiplier during dubbed speech.",
         ),
-    ] = 0.25,
+    ] = None,
     speech_gain: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--speech-gain",
             help="Dubbed speech volume multiplier.",
         ),
-    ] = 1.0,
+    ] = None,
     ducking_margin_seconds: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--ducking-margin",
             help="Extra ducking time before and after each speech segment.",
         ),
-    ] = 0.05,
+    ] = None,
     ducking_fade_seconds: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--ducking-fade",
             help="Fade time for ducking transitions.",
         ),
-    ] = 0.05,
+    ] = None,
     export_srt_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--export-srt/--no-export-srt",
             help="Save an external SRT subtitle file for the final spoken text.",
         ),
-    ] = False,
+    ] = None,
     srt_output_path: Annotated[
         Path | None,
         typer.Option(
@@ -1383,19 +1393,19 @@ def dub(
         ),
     ] = None,
     srt_text_mode: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--srt-text",
             help="SRT text: auto, source, translated, or adapted.",
         ),
-    ] = "adapted",
+    ] = None,
     write_manifest_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--manifest/--no-manifest",
             help="Save a JSON manifest describing this dubbing run.",
         ),
-    ] = True,
+    ] = None,
     manifest_output_path: Annotated[
         Path | None,
         typer.Option(
@@ -1404,57 +1414,109 @@ def dub(
         ),
     ] = None,
     preflight_enabled: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--preflight/--no-preflight",
             help="Check tools and paths before starting the dubbing run.",
         ),
-    ] = True,
+    ] = None,
     ffmpeg_executable: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--ffmpeg",
             help="ffmpeg executable name or path.",
         ),
-    ] = "ffmpeg",
+    ] = None,
     overwrite: Annotated[
-        bool,
+        bool | None,
         typer.Option(
-            "--overwrite",
+            "--overwrite/--no-overwrite",
             help="Replace existing intermediate and output files.",
         ),
-    ] = False,
+    ] = None,
 ) -> None:
     """Run the full dubbing pipeline."""
-    workspace = workspace_dir or Path(".dublaro") / video_path.stem
+    try:
+        loaded_config = load_config(config_path)
+        settings = resolve_dub_settings(
+            video_path=video_path,
+            loaded_config=loaded_config,
+            overrides=DubCliOverrides(
+                source_language=source_language,
+                target_language=target_language,
+                output_path=output_path,
+                workspace_dir=workspace_dir,
+                resume=resume_enabled,
+                overwrite=overwrite,
+                preflight=preflight_enabled,
+                ffmpeg_executable=ffmpeg_executable,
+                asr_sample_rate=asr_sample_rate,
+                speech_sample_rate=speech_sample_rate,
+                asr_backend=asr_backend,
+                model_size=model_size,
+                device=device,
+                compute_type=compute_type,
+                translation_backend=translation_backend,
+                install_package=install_package,
+                translation_group_segments=translation_group_segments,
+                max_translation_group_pause_seconds=max_translation_group_pause_seconds,
+                max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+                text_adapter_backend=text_adapter_backend,
+                tts_backend=tts_backend,
+                piper_model_path=piper_model_path,
+                piper_config_path=piper_config_path,
+                piper_executable=piper_executable,
+                piper_speaker=piper_speaker,
+                fit_speech=fit_speech_enabled,
+                max_speech_speedup=max_speech_speedup,
+                min_speech_overrun_seconds=min_speech_overrun_seconds,
+                mix_original_audio=mix_original_audio_enabled,
+                original_audio_gain=original_audio_gain,
+                ducking_gain=ducking_gain,
+                speech_gain=speech_gain,
+                ducking_margin_seconds=ducking_margin_seconds,
+                ducking_fade_seconds=ducking_fade_seconds,
+                export_srt=export_srt_enabled,
+                srt_output_path=srt_output_path,
+                srt_text_mode=srt_text_mode,
+                write_manifest=write_manifest_enabled,
+                manifest_output_path=manifest_output_path,
+            ),
+        )
+        parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
 
-    if manifest_output_path is not None and not write_manifest_enabled:
-        raise typer.BadParameter("--manifest-output cannot be used with --no-manifest.")
+        if settings.manifest_output_path is not None and not settings.write_manifest:
+            raise ValueError(
+                "--manifest-output cannot be used when manifest writing is disabled."
+            )
 
-    if resume_enabled and overwrite:
-        raise typer.BadParameter("--resume cannot be used with --overwrite.")
+        if settings.resume and settings.overwrite:
+            raise ValueError("--resume cannot be used with --overwrite.")
+    except (DublaroConfigError, ValueError, typer.BadParameter) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
 
-    if preflight_enabled:
+    if settings.preflight:
         report = validate_dub_preflight(
             video_path=video_path,
-            output_path=output_path,
-            workspace_dir=workspace,
-            overwrite=overwrite,
-            ffmpeg_executable=ffmpeg_executable,
-            asr_backend=asr_backend,
-            translation_backend=translation_backend,
-            source_language=source_language,
-            target_language=target_language,
-            install_translation_package=install_package,
-            tts_backend=tts_backend,
-            piper_model_path=piper_model_path,
-            piper_config_path=piper_config_path,
-            piper_executable=piper_executable,
-            export_srt=export_srt_enabled,
-            srt_output_path=srt_output_path,
-            write_manifest=write_manifest_enabled,
-            manifest_output_path=manifest_output_path,
-            resume=resume_enabled,
+            output_path=settings.output_path,
+            workspace_dir=settings.workspace_dir,
+            overwrite=settings.overwrite,
+            ffmpeg_executable=settings.ffmpeg_executable,
+            asr_backend=settings.asr_backend,
+            translation_backend=settings.translation_backend,
+            source_language=settings.source_language,
+            target_language=settings.target_language,
+            install_translation_package=settings.install_package,
+            tts_backend=settings.tts_backend,
+            piper_model_path=settings.piper_model_path,
+            piper_config_path=settings.piper_config_path,
+            piper_executable=settings.piper_executable,
+            export_srt=settings.export_srt,
+            srt_output_path=settings.srt_output_path,
+            write_manifest=settings.write_manifest,
+            manifest_output_path=settings.manifest_output_path,
+            resume=settings.resume,
         )
         print_preflight_report(report)
 
@@ -1464,51 +1526,51 @@ def dub(
     try:
         artifacts = dub_video(
             video_path,
-            output_path,
-            source_language=source_language,
-            target_language=target_language,
-            workspace_dir=workspace,
+            settings.output_path,
+            source_language=settings.source_language,
+            target_language=settings.target_language,
+            workspace_dir=settings.workspace_dir,
             asr_adapter=create_asr_adapter(
-                asr_backend,
-                model_size=model_size,
-                device=device,
-                compute_type=compute_type,
+                settings.asr_backend,
+                model_size=settings.model_size,
+                device=settings.device,
+                compute_type=settings.compute_type,
             ),
             translation_adapter=create_translation_adapter(
-                translation_backend,
-                auto_install=install_package,
+                settings.translation_backend,
+                auto_install=settings.install_package,
             ),
-            text_adapter=create_text_adapter(text_adapter_backend),
+            text_adapter=create_text_adapter(settings.text_adapter_backend),
             tts_adapter=create_tts_adapter(
-                tts_backend,
-                piper_model_path=piper_model_path,
-                piper_config_path=piper_config_path,
-                piper_executable=piper_executable,
-                piper_speaker=piper_speaker,
+                settings.tts_backend,
+                piper_model_path=settings.piper_model_path,
+                piper_config_path=settings.piper_config_path,
+                piper_executable=settings.piper_executable,
+                piper_speaker=settings.piper_speaker,
             ),
-            translation_group_segments=translation_group_segments,
-            max_translation_group_pause_seconds=max_translation_group_pause_seconds,
-            max_translation_group_duration_seconds=max_translation_group_duration_seconds,
-            asr_sample_rate=asr_sample_rate,
-            speech_sample_rate=speech_sample_rate,
-            fit_speech=fit_speech_enabled,
-            max_speech_speedup=max_speech_speedup,
-            min_speech_overrun_seconds=min_speech_overrun_seconds,
-            mix_original_audio=mix_original_audio_enabled,
-            original_audio_gain=original_audio_gain,
-            ducking_gain=ducking_gain,
-            speech_gain=speech_gain,
-            ducking_margin_seconds=ducking_margin_seconds,
-            ducking_fade_seconds=ducking_fade_seconds,
-            export_srt=export_srt_enabled,
-            srt_output_path=srt_output_path,
-            srt_text_mode=parse_srt_text_mode(srt_text_mode),
+            translation_group_segments=settings.translation_group_segments,
+            max_translation_group_pause_seconds=settings.max_translation_group_pause_seconds,
+            max_translation_group_duration_seconds=settings.max_translation_group_duration_seconds,
+            asr_sample_rate=settings.asr_sample_rate,
+            speech_sample_rate=settings.speech_sample_rate,
+            fit_speech=settings.fit_speech,
+            max_speech_speedup=settings.max_speech_speedup,
+            min_speech_overrun_seconds=settings.min_speech_overrun_seconds,
+            mix_original_audio=settings.mix_original_audio,
+            original_audio_gain=settings.original_audio_gain,
+            ducking_gain=settings.ducking_gain,
+            speech_gain=settings.speech_gain,
+            ducking_margin_seconds=settings.ducking_margin_seconds,
+            ducking_fade_seconds=settings.ducking_fade_seconds,
+            export_srt=settings.export_srt,
+            srt_output_path=settings.srt_output_path,
+            srt_text_mode=parsed_srt_text_mode,
             progress_callback=print_dub_progress,
-            write_manifest=write_manifest_enabled,
-            manifest_output_path=manifest_output_path,
-            ffmpeg_executable=ffmpeg_executable,
-            resume=resume_enabled,
-            overwrite=overwrite,
+            write_manifest=settings.write_manifest,
+            manifest_output_path=settings.manifest_output_path,
+            ffmpeg_executable=settings.ffmpeg_executable,
+            resume=settings.resume,
+            overwrite=settings.overwrite,
         )
     except (
         FFmpegError,
@@ -1533,11 +1595,11 @@ def dub(
     if artifacts.manifest_path is not None:
         console.print(f"[green]Manifest:[/green] {artifacts.manifest_path}")
 
-    if asr_backend == "fake":
+    if settings.asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
-    if translation_backend == "fake":
+    if settings.translation_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
-    if text_adapter_backend == "fake":
+    if settings.text_adapter_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake text adapter.")
-    if tts_backend == "fake":
+    if settings.tts_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake TTS adapter.")
