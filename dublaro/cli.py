@@ -8,7 +8,11 @@ from rich.text import Text
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
-from dublaro.adapters.diarization import DiarizationAdapter, FakeDiarizationAdapter
+from dublaro.adapters.diarization import (
+    DiarizationAdapter,
+    FakeDiarizationAdapter,
+    PyannoteDiarizationAdapter,
+)
 from dublaro.adapters.text_adapter import (
     FakeTextAdapter,
     RuleBasedTextAdapter,
@@ -124,11 +128,24 @@ def create_asr_adapter(
     raise typer.BadParameter("ASR backend must be 'fake' or 'faster-whisper'.")
 
 
-def create_diarization_adapter(backend: str) -> DiarizationAdapter:
+def create_diarization_adapter(
+    backend: str,
+    *,
+    model_id: str,
+    device: str | None = None,
+    token_env_var: str | None = None,
+) -> DiarizationAdapter:
     if backend == "fake":
         return FakeDiarizationAdapter()
 
-    raise typer.BadParameter("Diarization backend must be 'fake'.")
+    if backend == "pyannote":
+        return PyannoteDiarizationAdapter(
+            model_id=model_id,
+            device=device,
+            token_env_var=token_env_var,
+        )
+
+    raise typer.BadParameter("Diarization backend must be 'fake' or 'pyannote'.")
 
 
 def create_translation_adapter(
@@ -1274,6 +1291,27 @@ def dub(
             help="Diarization backend: fake.",
         ),
     ] = None,
+    diarization_model_id: Annotated[
+        str | None,
+        typer.Option(
+            "--diarization-model",
+            help="pyannote model id or local pipeline path.",
+        ),
+    ] = None,
+    diarization_device: Annotated[
+        str | None,
+        typer.Option(
+            "--diarization-device",
+            help="Device for pyannote, for example cpu or cuda.",
+        ),
+    ] = None,
+    diarization_token_env_var: Annotated[
+        str | None,
+        typer.Option(
+            "--diarization-token-env",
+            help="Environment variable containing the Hugging Face token.",
+        ),
+    ] = None,
     diarization_min_speakers: Annotated[
         int | None,
         typer.Option(
@@ -1502,6 +1540,9 @@ def dub(
                 compute_type=compute_type,
                 diarize=diarize_enabled,
                 diarization_backend=diarization_backend,
+                diarization_model_id=diarization_model_id,
+                diarization_device=diarization_device,
+                diarization_token_env_var=diarization_token_env_var,
                 diarization_min_speakers=diarization_min_speakers,
                 diarization_max_speakers=diarization_max_speakers,
                 translation_backend=translation_backend,
@@ -1585,7 +1626,12 @@ def dub(
                 compute_type=settings.compute_type,
             ),
             diarization_adapter=(
-                create_diarization_adapter(settings.diarization_backend)
+                create_diarization_adapter(
+                    settings.diarization_backend,
+                    model_id=settings.diarization_model_id,
+                    device=settings.diarization_device,
+                    token_env_var=settings.diarization_token_env_var,
+                )
                 if settings.diarize
                 else None
             ),

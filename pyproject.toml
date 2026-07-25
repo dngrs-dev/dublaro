@@ -20,6 +20,7 @@ dependencies = ["pydantic>=2.8", "typer>=0.12", "rich>=13.7"]
 
 [project.optional-dependencies]
 asr = ["faster-whisper>=1.0"]
+diarization = ["pyannote.audio>=4.0"]
 translation = ["argostranslate>=1.9"]
 
 [project.urls]

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+from dublaro.adapters.diarization import DEFAULT_PYANNOTE_MODEL_ID
 from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
 from dublaro.config import LoadedConfig, resolve_config_path
 from dublaro.pipeline.export import (
@@ -31,6 +32,9 @@ class DubCliOverrides:
     compute_type: str | None = None
     diarize: bool | None = None
     diarization_backend: str | None = None
+    diarization_model_id: str | None = None
+    diarization_device: str | None = None
+    diarization_token_env_var: str | None = None
     diarization_min_speakers: int | None = None
     diarization_max_speakers: int | None = None
     translation_backend: str | None = None
@@ -78,6 +82,9 @@ class ResolvedDubSettings:
     compute_type: str
     diarize: bool
     diarization_backend: str
+    diarization_model_id: str
+    diarization_device: str | None
+    diarization_token_env_var: str | None
     diarization_min_speakers: int | None
     diarization_max_speakers: int | None
     translation_backend: str
@@ -325,6 +332,19 @@ def resolve_dub_settings(
             overrides.diarization_backend,
             config.diarization.backend,
             "fake",
+        ),
+        diarization_model_id=_select(
+            overrides.diarization_model_id,
+            config.diarization.model_id,
+            DEFAULT_PYANNOTE_MODEL_ID,
+        ),
+        diarization_device=_select_optional(
+            overrides.diarization_device,
+            config.diarization.device,
+        ),
+        diarization_token_env_var=_select_optional(
+            overrides.diarization_token_env_var,
+            config.diarization.token_env_var,
         ),
         diarization_min_speakers=diarization_min_speakers,
         diarization_max_speakers=diarization_max_speakers,

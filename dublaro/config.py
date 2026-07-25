@@ -25,6 +25,11 @@ class DiarizationConfig(BaseModel):
 
     enabled: bool | None = None
     backend: str | None = None
+
+    model_id: str | None = None
+    device: str | None = None
+    token_env_var: str | None = None
+
     min_speakers: int | None = Field(ge=1, default=None)
     max_speakers: int | None = Field(ge=1, default=None)
 
