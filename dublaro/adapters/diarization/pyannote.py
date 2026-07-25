@@ -1,4 +1,5 @@
 import os
+import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,13 @@ class PyannoteDiarizationAdapter:
         if options.max_speakers is not None:
             kwargs["max_speakers"] = options.max_speakers
 
-        output = self._pipeline(_load_waveform(audio_path), **kwargs)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="std\\(\\): degrees of freedom is <= 0.*",
+                category=UserWarning,
+            )
+            output = self._pipeline(_load_waveform(audio_path), **kwargs)
         diarization = getattr(output, "exclusive_speaker_diarization", None) or getattr(
             output, "speaker_diarization", output
         )
@@ -49,14 +56,20 @@ class PyannoteDiarizationAdapter:
 
     def _load_pipeline(self) -> Any:
         try:
-            from pyannote.audio import Pipeline
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"\s*torchcodec is not installed correctly.*",
+                    category=UserWarning,
+                )
+                from pyannote.audio import Pipeline
+
+                token = _read_token(self.token_env_var)
+                pipeline = Pipeline.from_pretrained(self.model_id, token=token)
         except ImportError as error:
             raise RuntimeError(
                 'pyannote.audio is not installed. Install it with: pip install -e ".[diarization]"'
             ) from error
-
-        token = _read_token(self.token_env_var)
-        pipeline = Pipeline.from_pretrained(self.model_id, token=token)
 
         if pipeline is None:
             raise RuntimeError(
