@@ -6,9 +6,11 @@ from pathlib import Path
 from typing import Literal
 
 from dublaro.adapters.asr import TranscriptionOptions
+from dublaro.adapters.diarization import DiarizationOptions
 from dublaro.audio.ffmpeg import extract_audio_from_video
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
+from dublaro.pipeline.diarize import diarize_transcript
 from dublaro.pipeline.dub_plan import (
     DubAdapters,
     DubArtifactPaths,
@@ -38,6 +40,7 @@ from dublaro.schemas import Transcript
 DubbingProgressStep = Literal[
     "extract_audio",
     "transcribe",
+    "diarize",
     "translate",
     "adapt_text",
     "synthesize",
@@ -85,6 +88,7 @@ class ManifestInputs:
     started_at: datetime
     extracted_audio_path: Path
     source_transcript_path: Path
+    diarized_transcript_path: Path | None
     translated_transcript_path: Path
     adapted_transcript_path: Path
     synthesized_transcript_path: Path
@@ -193,6 +197,48 @@ def _transcribe_source_audio(
         )
         save_transcript(source_transcript, source_transcript_path)
         return source_transcript
+
+
+def _diarize_source_transcript(
+    context: DubRunContext,
+    extracted_audio_path: Path,
+    source_transcript: Transcript,
+) -> Transcript:
+    if not context.options.diarize:
+        return source_transcript
+
+    if context.adapters.diarization is None:
+        raise ValueError("diarization_adapter is required when diarize is True.")
+
+    diarized_path = context.artifact_paths.diarized_transcript_path
+    reusable = (
+        load_reusable_transcript(diarized_path) if context.options.resume else None
+    )
+
+    if reusable is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "diarize",
+            f"Using existing diarized transcript: {diarized_path}.",
+        )
+        return reusable
+
+    with _progress_stage(
+        context.progress_callback,
+        "diarize",
+        "Assigning speakers to transcript segments.",
+    ):
+        diarized = diarize_transcript(
+            extracted_audio_path,
+            source_transcript,
+            adapter=context.adapters.diarization,
+            options=DiarizationOptions(
+                min_speakers=context.options.diarization_min_speakers,
+                max_speakers=context.options.diarization_max_speakers,
+            ),
+        )
+        save_transcript(diarized, diarized_path)
+        return diarized
 
 
 def _translate_source_transcript(
@@ -511,11 +557,15 @@ def _write_manifest(
             source_language=inputs.source_transcript.source_language,
             target_language=run_options.target_language,
             asr_adapter=adapters.asr,
+            diarization_adapter=adapters.diarization,
             translation_adapter=adapters.translation,
             text_adapter=adapters.text_adapter,
             tts_adapter=adapters.tts,
             options=DubbingOptionsManifest(
                 asr_sample_rate=run_options.asr_sample_rate,
+                diarize=run_options.diarize,
+                diarization_min_speakers=run_options.diarization_min_speakers,
+                diarization_max_speakers=run_options.diarization_max_speakers,
                 speech_sample_rate=run_options.speech_sample_rate,
                 fit_speech=run_options.fit_speech,
                 max_speech_speedup=run_options.max_speech_speedup,
@@ -543,6 +593,11 @@ def _write_manifest(
                 workspace_dir=str(context.paths.workspace_dir),
                 extracted_audio_path=str(inputs.extracted_audio_path),
                 source_transcript_path=str(inputs.source_transcript_path),
+                diarized_transcript_path=(
+                    str(inputs.diarized_transcript_path)
+                    if inputs.diarized_transcript_path is not None
+                    else None
+                ),
                 translated_transcript_path=str(inputs.translated_transcript_path),
                 adapted_transcript_path=str(inputs.adapted_transcript_path),
                 synthesized_transcript_path=str(inputs.synthesized_transcript_path),

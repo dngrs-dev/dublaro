@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dublaro.adapters.asr import AsrAdapter
+from dublaro.adapters.diarization import DiarizationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
@@ -14,6 +15,7 @@ class DubAdapters:
     translation: TranslationAdapter
     text_adapter: TextAdapter
     tts: TtsAdapter
+    diarization: DiarizationAdapter | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,9 @@ class DubOptions:
     translation_group_segments: bool = True
     max_translation_group_pause_seconds: float = 0.8
     max_translation_group_duration_seconds: float = 12.0
+    diarize: bool = False
+    diarization_min_speakers: int | None = None
+    diarization_max_speakers: int | None = None
     export_srt: bool = False
     srt_output_path: Path | None = None
     srt_text_mode: SrtTextMode = "adapted"
@@ -60,6 +65,7 @@ class DubArtifactPaths:
     translated_transcript_path: Path
     adapted_transcript_path: Path
     synthesized_transcript_path: Path
+    diarized_transcript_path: Path
     speech_dir: Path
     speech_track_path: Path
     fitted_transcript_path: Path
@@ -106,6 +112,8 @@ class DubPaths:
                 self.workspace_dir
                 / f"{stem}.{options.target_language}.synthesized.json"
             ),
+            diarized_transcript_path=self.workspace_dir
+            / f"{stem}.{source_label}.diarized.json",
             speech_dir=self.workspace_dir / f"{stem}.{options.target_language}.speech",
             speech_track_path=(
                 self.workspace_dir

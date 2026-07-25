@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from dublaro.adapters.asr import AsrAdapter
+from dublaro.adapters.diarization import DiarizationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
@@ -15,6 +16,7 @@ from dublaro.pipeline.dub_stages import (
     ManifestInputs,
     _adapt_translated_text,
     _align_speech_track,
+    _diarize_source_transcript,
     _export_srt,
     _export_video,
     _extract_audio,
@@ -41,6 +43,7 @@ class DubbingArtifacts:
     workspace_dir: Path
     extracted_audio_path: Path
     source_transcript_path: Path
+    diarized_transcript_path: Path | None
     translated_transcript_path: Path
     adapted_transcript_path: Path
     synthesized_transcript_path: Path
@@ -66,6 +69,10 @@ def dub_video(
     translation_adapter: TranslationAdapter,
     text_adapter: TextAdapter,
     tts_adapter: TtsAdapter,
+    diarization_adapter: DiarizationAdapter | None = None,
+    diarize: bool = False,
+    diarization_min_speakers: int | None = None,
+    diarization_max_speakers: int | None = None,
     asr_sample_rate: int = 16_000,
     speech_sample_rate: int = 24_000,
     fit_speech: bool = False,
@@ -99,6 +106,9 @@ def dub_video(
         source_language=source_language,
         target_language=target_language,
         asr_sample_rate=asr_sample_rate,
+        diarize=diarize,
+        diarization_min_speakers=diarization_min_speakers,
+        diarization_max_speakers=diarization_max_speakers,
         speech_sample_rate=speech_sample_rate,
         fit_speech=fit_speech,
         max_speech_speedup=max_speech_speedup,
@@ -125,6 +135,7 @@ def dub_video(
     )
     adapters = DubAdapters(
         asr=asr_adapter,
+        diarization=diarization_adapter,
         translation=translation_adapter,
         text_adapter=text_adapter,
         tts=tts_adapter,
@@ -150,6 +161,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     extracted_audio_path = _extract_audio(context)
     source_transcript_path = artifact_paths.source_transcript_path
+    diarized_transcript_path = (
+        artifact_paths.diarized_transcript_path if context.options.diarize else None
+    )
     translated_transcript_path = artifact_paths.translated_transcript_path
     adapted_transcript_path = artifact_paths.adapted_transcript_path
     synthesized_transcript_path = artifact_paths.synthesized_transcript_path
@@ -157,6 +171,11 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     speech_track_path = artifact_paths.speech_track_path
 
     source_transcript = _transcribe_source_audio(context, extracted_audio_path)
+    source_transcript = _diarize_source_transcript(
+        context,
+        extracted_audio_path,
+        source_transcript,
+    )
 
     translated_transcript = _translate_source_transcript(context, source_transcript)
 
@@ -188,6 +207,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         started_at=started_at,
         extracted_audio_path=extracted_audio_path,
         source_transcript_path=source_transcript_path,
+        diarized_transcript_path=diarized_transcript_path,
         translated_transcript_path=translated_transcript_path,
         adapted_transcript_path=adapted_transcript_path,
         synthesized_transcript_path=synthesized_transcript_path,
@@ -211,6 +231,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         workspace_dir=workspace,
         extracted_audio_path=extracted_audio_path,
         source_transcript_path=source_transcript_path,
+        diarized_transcript_path=diarized_transcript_path,
         translated_transcript_path=translated_transcript_path,
         adapted_transcript_path=adapted_transcript_path,
         synthesized_transcript_path=synthesized_transcript_path,

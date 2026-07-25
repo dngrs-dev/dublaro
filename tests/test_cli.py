@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from dublaro import cli
+from dublaro.adapters.diarization import FakeDiarizationAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav, write_mono_pcm16_wav
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
@@ -618,9 +619,13 @@ def test_dub_command_runs_full_pipeline(
         target_language: str,
         workspace_dir: Path,
         asr_adapter: object,
+        diarization_adapter: object | None = None,
         translation_adapter: object,
         text_adapter: object,
         tts_adapter: object,
+        diarize: bool = False,
+        diarization_min_speakers: int | None = None,
+        diarization_max_speakers: int | None = None,
         translation_group_segments: bool = True,
         max_translation_group_pause_seconds: float = 0.8,
         max_translation_group_duration_seconds: float = 12.0,
@@ -652,6 +657,9 @@ def test_dub_command_runs_full_pipeline(
                 "source_language": source_language,
                 "target_language": target_language,
                 "workspace_dir": workspace_dir,
+                "diarize": diarize,
+                "diarization_min_speakers": diarization_min_speakers,
+                "diarization_max_speakers": diarization_max_speakers,
                 "translation_group_segments": translation_group_segments,
                 "max_translation_group_pause_seconds": max_translation_group_pause_seconds,
                 "max_translation_group_duration_seconds": max_translation_group_duration_seconds,
@@ -738,6 +746,9 @@ def test_dub_command_runs_full_pipeline(
             "source_language": "en",
             "target_language": "pl",
             "workspace_dir": workspace_dir,
+            "diarize": False,
+            "diarization_min_speakers": None,
+            "diarization_max_speakers": None,
             "translation_group_segments": True,
             "max_translation_group_pause_seconds": 0.8,
             "max_translation_group_duration_seconds": 12.0,
@@ -1256,3 +1267,64 @@ def test_dub_command_rejects_output_with_output_dir(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "--output cannot be used with --output-dir" in result.output
+
+
+def test_dub_command_passes_diarization_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    class FakeArtifacts:
+        def __init__(self, dubbed_video_path: Path, workspace_dir: Path) -> None:
+            self.dubbed_video_path = dubbed_video_path
+            self.workspace_dir = workspace_dir
+            self.fitted_transcript_path = None
+            self.mixed_audio_path = None
+            self.srt_path = None
+            self.manifest_path = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--diarize",
+            "--diarizer",
+            "fake",
+            "--min-speakers",
+            "1",
+            "--max-speakers",
+            "2",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["diarize"] is True
+    assert calls[0]["diarization_min_speakers"] == 1
+    assert calls[0]["diarization_max_speakers"] == 2
+
+    diarization_adapter = calls[0]["diarization_adapter"]
+
+    assert isinstance(diarization_adapter, FakeDiarizationAdapter)
+    assert diarization_adapter.name == "fake-diarization"

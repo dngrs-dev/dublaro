@@ -8,6 +8,7 @@ from rich.text import Text
 
 from dublaro import __version__
 from dublaro.adapters.asr import AsrAdapter, FakeAsrAdapter, TranscriptionOptions
+from dublaro.adapters.diarization import DiarizationAdapter, FakeDiarizationAdapter
 from dublaro.adapters.text_adapter import (
     FakeTextAdapter,
     RuleBasedTextAdapter,
@@ -121,6 +122,13 @@ def create_asr_adapter(
         )
 
     raise typer.BadParameter("ASR backend must be 'fake' or 'faster-whisper'.")
+
+
+def create_diarization_adapter(backend: str) -> DiarizationAdapter:
+    if backend == "fake":
+        return FakeDiarizationAdapter()
+
+    raise typer.BadParameter("Diarization backend must be 'fake'.")
 
 
 def create_translation_adapter(
@@ -1252,6 +1260,34 @@ def dub(
             help="faster-whisper compute type.",
         ),
     ] = None,
+    diarize_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--diarize/--no-diarize",
+            help="Assign speaker labels to transcript segments.",
+        ),
+    ] = None,
+    diarization_backend: Annotated[
+        str | None,
+        typer.Option(
+            "--diarizer",
+            help="Diarization backend: fake.",
+        ),
+    ] = None,
+    diarization_min_speakers: Annotated[
+        int | None,
+        typer.Option(
+            "--min-speakers",
+            help="Minimum expected speaker count for diarization.",
+        ),
+    ] = None,
+    diarization_max_speakers: Annotated[
+        int | None,
+        typer.Option(
+            "--max-speakers",
+            help="Maximum expected speaker count for diarization.",
+        ),
+    ] = None,
     install_package: Annotated[
         bool | None,
         typer.Option(
@@ -1464,6 +1500,10 @@ def dub(
                 model_size=model_size,
                 device=device,
                 compute_type=compute_type,
+                diarize=diarize_enabled,
+                diarization_backend=diarization_backend,
+                diarization_min_speakers=diarization_min_speakers,
+                diarization_max_speakers=diarization_max_speakers,
                 translation_backend=translation_backend,
                 install_package=install_package,
                 translation_group_segments=translation_group_segments,
@@ -1544,6 +1584,11 @@ def dub(
                 device=settings.device,
                 compute_type=settings.compute_type,
             ),
+            diarization_adapter=(
+                create_diarization_adapter(settings.diarization_backend)
+                if settings.diarize
+                else None
+            ),
             translation_adapter=create_translation_adapter(
                 settings.translation_backend,
                 auto_install=settings.install_package,
@@ -1556,6 +1601,9 @@ def dub(
                 piper_executable=settings.piper_executable,
                 piper_speaker=settings.piper_speaker,
             ),
+            diarize=settings.diarize,
+            diarization_min_speakers=settings.diarization_min_speakers,
+            diarization_max_speakers=settings.diarization_max_speakers,
             translation_group_segments=settings.translation_group_segments,
             max_translation_group_pause_seconds=settings.max_translation_group_pause_seconds,
             max_translation_group_duration_seconds=settings.max_translation_group_duration_seconds,
@@ -1605,6 +1653,8 @@ def dub(
 
     if settings.asr_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
+    if settings.diarize and settings.diarization_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake diarization adapter.")
     if settings.translation_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
     if settings.text_adapter_backend == "fake":

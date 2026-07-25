@@ -29,6 +29,10 @@ class DubCliOverrides:
     model_size: str | None = None
     device: str | None = None
     compute_type: str | None = None
+    diarize: bool | None = None
+    diarization_backend: str | None = None
+    diarization_min_speakers: int | None = None
+    diarization_max_speakers: int | None = None
     translation_backend: str | None = None
     install_package: bool | None = None
     translation_group_segments: bool | None = None
@@ -72,6 +76,10 @@ class ResolvedDubSettings:
     model_size: str
     device: str
     compute_type: str
+    diarize: bool
+    diarization_backend: str
+    diarization_min_speakers: int | None
+    diarization_max_speakers: int | None
     translation_backend: str
     install_package: bool
     translation_group_segments: bool
@@ -134,6 +142,24 @@ def _required_text(
     if value is None:
         raise ValueError(f"{option_name} is required when {config_name} is not set.")
     return value
+
+
+def _validate_speaker_range(
+    min_speakers: int | None,
+    max_speakers: int | None,
+) -> None:
+    if min_speakers is not None and min_speakers < 1:
+        raise ValueError("--min-speakers must be >= 1.")
+
+    if max_speakers is not None and max_speakers < 1:
+        raise ValueError("--max-speakers must be >= 1.")
+
+    if (
+        min_speakers is not None
+        and max_speakers is not None
+        and min_speakers > max_speakers
+    ):
+        raise ValueError("--min-speakers cannot be greater than --max-speakers.")
 
 
 def _resolve_output_path(
@@ -260,6 +286,16 @@ def resolve_dub_settings(
         piper_config_path=piper_config_path,
     )
 
+    diarization_min_speakers = _select_optional(
+        overrides.diarization_min_speakers,
+        config.diarization.min_speakers,
+    )
+    diarization_max_speakers = _select_optional(
+        overrides.diarization_max_speakers,
+        config.diarization.max_speakers,
+    )
+    _validate_speaker_range(diarization_min_speakers, diarization_max_speakers)
+
     return ResolvedDubSettings(
         source_language=_select_optional(
             overrides.source_language,
@@ -284,6 +320,14 @@ def resolve_dub_settings(
         model_size=_select(overrides.model_size, config.asr.model_size, "small"),
         device=_select(overrides.device, config.asr.device, "cpu"),
         compute_type=_select(overrides.compute_type, config.asr.compute_type, "int8"),
+        diarize=_select(overrides.diarize, config.diarization.enabled, False),
+        diarization_backend=_select(
+            overrides.diarization_backend,
+            config.diarization.backend,
+            "fake",
+        ),
+        diarization_min_speakers=diarization_min_speakers,
+        diarization_max_speakers=diarization_max_speakers,
         translation_backend=_select(
             overrides.translation_backend,
             config.translation.backend,

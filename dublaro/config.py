@@ -2,7 +2,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from dublaro.pipeline.subtitles import SrtTextMode
 
@@ -18,6 +18,27 @@ class AsrConfig(BaseModel):
     model_size: str | None = None
     device: str | None = None
     compute_type: str | None = None
+
+
+class DiarizationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    backend: str | None = None
+    min_speakers: int | None = Field(ge=1, default=None)
+    max_speakers: int | None = Field(ge=1, default=None)
+
+    @model_validator(mode="after")
+    def validate_speaker_range(self) -> "DiarizationConfig":
+        if (
+            self.min_speakers is not None
+            and self.max_speakers is not None
+            and self.min_speakers > self.max_speakers
+        ):
+            raise ValueError(
+                "dub.diarization.min_speakers cannot be greater than max_speakers"
+            )
+        return self
 
 
 class TranslationConfig(BaseModel):
@@ -96,6 +117,7 @@ class DubConfig(BaseModel):
     speech_sample_rate: int | None = None
 
     asr: AsrConfig = AsrConfig()
+    diarization: DiarizationConfig = DiarizationConfig()
     translation: TranslationConfig = TranslationConfig()
     text_adapter: TextAdapterConfig = TextAdapterConfig()
     tts: TtsConfig = TtsConfig()

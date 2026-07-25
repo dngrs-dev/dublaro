@@ -33,6 +33,7 @@ class AdapterManifest(BaseModel):
 
 class DubbingAdaptersManifest(BaseModel):
     asr: AdapterManifest
+    diarization: AdapterManifest | None = None
     translation: AdapterManifest
     text_adapter: AdapterManifest
     tts: AdapterManifest
@@ -40,6 +41,9 @@ class DubbingAdaptersManifest(BaseModel):
 
 class DubbingOptionsManifest(BaseModel):
     asr_sample_rate: int
+    diarize: bool
+    diarization_min_speakers: int | None = None
+    diarization_max_speakers: int | None = None
     speech_sample_rate: int
     resume: bool
     fit_speech: bool
@@ -64,6 +68,7 @@ class DubbingArtifactsManifest(BaseModel):
     workspace_dir: str
     extracted_audio_path: str
     source_transcript_path: str
+    diarized_transcript_path: str | None = None
     translated_transcript_path: str
     adapted_transcript_path: str
     synthesized_transcript_path: str
@@ -102,6 +107,7 @@ def build_dubbing_manifest(
     source_language: str | None,
     target_language: str,
     asr_adapter: object,
+    diarization_adapter: object | None = None,
     translation_adapter: object,
     text_adapter: object,
     tts_adapter: object,
@@ -121,6 +127,11 @@ def build_dubbing_manifest(
         ),
         adapters=DubbingAdaptersManifest(
             asr=describe_adapter(asr_adapter),
+            diarization=(
+                describe_adapter(diarization_adapter)
+                if diarization_adapter is not None
+                else None
+            ),
             translation=describe_adapter(translation_adapter),
             text_adapter=describe_adapter(text_adapter),
             tts=describe_adapter(tts_adapter),
