@@ -28,7 +28,11 @@ from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
 )
-from dublaro.cli_config import DubCliOverrides, resolve_dub_settings
+from dublaro.cli_config import (
+    DubCliOverrides,
+    ResolvedVoiceProfileSettings,
+    resolve_dub_settings,
+)
 from dublaro.config import DublaroConfigError, load_config
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
@@ -75,6 +79,8 @@ from dublaro.pipeline.translate import (
     translate_transcript,
 )
 from dublaro.pipeline.units import group_segments_for_translation
+from dublaro.pipeline.voices import SpeakerVoice
+from dublaro.schemas import VoiceProfile
 
 app = typer.Typer(
     name="dublaro",
@@ -195,6 +201,37 @@ def create_tts_adapter(
         )
 
     raise typer.BadParameter("TTS backend must be 'fake' or 'piper'.")
+
+
+def create_speaker_voices(
+    profiles: dict[str, ResolvedVoiceProfileSettings],
+) -> dict[str, SpeakerVoice] | None:
+    if not profiles:
+        return None
+
+    speaker_voices: dict[str, SpeakerVoice] = {}
+
+    for speaker_id, profile in profiles.items():
+        adapter = create_tts_adapter(
+            profile.tts_backend,
+            piper_model_path=profile.piper_model_path,
+            piper_config_path=profile.piper_config_path,
+            piper_executable=profile.piper_executable,
+            piper_speaker=profile.piper_speaker,
+        )
+
+        speaker_voices[speaker_id] = SpeakerVoice(
+            profile=VoiceProfile(
+                speaker_id=speaker_id,
+                display_name=profile.display_name,
+                language=profile.language,
+                tts_backend=profile.tts_backend,
+                metadata=profile.metadata,
+            ),
+            adapter=adapter,
+        )
+
+    return speaker_voices
 
 
 def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
@@ -1647,6 +1684,7 @@ def dub(
                 piper_executable=settings.piper_executable,
                 piper_speaker=settings.piper_speaker,
             ),
+            speaker_voices=create_speaker_voices(settings.voice_profiles),
             diarize=settings.diarize,
             diarization_min_speakers=settings.diarization_min_speakers,
             diarization_max_speakers=settings.diarization_max_speakers,

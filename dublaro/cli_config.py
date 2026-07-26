@@ -4,7 +4,7 @@ from typing import TypeVar
 
 from dublaro.adapters.diarization import DEFAULT_PYANNOTE_MODEL_ID
 from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
-from dublaro.config import LoadedConfig, resolve_config_path
+from dublaro.config import LoadedConfig, VoiceConfig, resolve_config_path
 from dublaro.pipeline.export import (
     default_dubbed_video_path,
     default_dubbed_video_path_in_dir,
@@ -65,6 +65,19 @@ class DubCliOverrides:
 
 
 @dataclass(frozen=True)
+class ResolvedVoiceProfileSettings:
+    speaker_id: str
+    display_name: str | None
+    language: str | None
+    tts_backend: str
+    piper_model_path: Path | None
+    piper_config_path: Path | None
+    piper_executable: str
+    piper_speaker: int | None
+    metadata: dict[str, str]
+
+
+@dataclass(frozen=True)
 class ResolvedDubSettings:
     source_language: str | None
     target_language: str
@@ -98,6 +111,7 @@ class ResolvedDubSettings:
     piper_config_path: Path | None
     piper_executable: str
     piper_speaker: int | None
+    voice_profiles: dict[str, ResolvedVoiceProfileSettings]
     fit_speech: bool
     max_speech_speedup: float
     min_speech_overrun_seconds: float
@@ -207,6 +221,59 @@ def _resolve_output_path(
     return default_dubbed_video_path(video_path, target_language)
 
 
+def _resolve_voice_profiles(
+    config_profiles: dict[str, VoiceConfig],
+    *,
+    base_dir: Path | None,
+    default_tts_backend: str,
+    default_piper_model_path: Path | None,
+    default_piper_config_path: Path | None,
+    default_piper_executable: str,
+    default_piper_speaker: int | None,
+) -> dict[str, ResolvedVoiceProfileSettings]:
+    resolved: dict[str, ResolvedVoiceProfileSettings] = {}
+
+    for speaker_id, profile in config_profiles.items():
+        resolved[speaker_id] = ResolvedVoiceProfileSettings(
+            speaker_id=speaker_id,
+            display_name=profile.display_name,
+            language=profile.language,
+            tts_backend=profile.tts_backend or default_tts_backend,
+            piper_model_path=(
+                resolve_config_path(profile.piper_model_path, base_dir)
+                or default_piper_model_path
+            ),
+            piper_config_path=(
+                resolve_config_path(profile.piper_config_path, base_dir)
+                or default_piper_config_path
+            ),
+            piper_executable=profile.piper_executable or default_piper_executable,
+            piper_speaker=(
+                profile.piper_speaker
+                if profile.piper_speaker is not None
+                else default_piper_speaker
+            ),
+            metadata=dict(profile.metadata),
+        )
+
+    return resolved
+
+
+def _piper_sample_rate(
+    model_path: Path | None,
+    config_path: Path | None,
+) -> int | None:
+    metadata_path = config_path
+
+    if metadata_path is None and model_path is not None:
+        metadata_path = default_piper_config_path(model_path)
+
+    if metadata_path is None:
+        return None
+
+    return read_piper_sample_rate(metadata_path)
+
+
 def _resolve_speech_sample_rate(
     *,
     cli_value: int | None,
@@ -214,24 +281,45 @@ def _resolve_speech_sample_rate(
     tts_backend: str,
     piper_model_path: Path | None,
     piper_config_path: Path | None,
+    voice_profiles: dict[str, ResolvedVoiceProfileSettings] | None = None,
     default: int = 24_000,
 ) -> int:
+    detected_rates: set[int] = set()
+
+    if tts_backend == "piper":
+        rate = _piper_sample_rate(piper_model_path, piper_config_path)
+        if rate is not None:
+            detected_rates.add(rate)
+
+    for profile in (voice_profiles or {}).values():
+        if profile.tts_backend != "piper":
+            continue
+
+        rate = _piper_sample_rate(profile.piper_model_path, profile.piper_config_path)
+        if rate is not None:
+            detected_rates.add(rate)
+
+    if len(detected_rates) > 1:
+        rates = ", ".join(str(rate) for rate in sorted(detected_rates))
+        raise ValueError(
+            "Piper voices use different sample rates "
+            f"({rates}). Use voices with the same sample rate in one dub run."
+        )
+
     configured_value = _select_optional(cli_value, config_value)
     if configured_value is not None:
+        if detected_rates and configured_value not in detected_rates:
+            detected_rate = next(iter(detected_rates))
+            raise ValueError(
+                "Configured speech sample rate does not match Piper voice sample rate: "
+                f"{configured_value} != {detected_rate}."
+            )
         return configured_value
 
-    if tts_backend != "piper":
-        return default
+    if detected_rates:
+        return next(iter(detected_rates))
 
-    metadata_path = piper_config_path
-    if metadata_path is None and piper_model_path is not None:
-        metadata_path = default_piper_config_path(piper_model_path)
-
-    if metadata_path is None:
-        return default
-
-    detected_sample_rate = read_piper_sample_rate(metadata_path)
-    return detected_sample_rate if detected_sample_rate is not None else default
+    return default
 
 
 def resolve_dub_settings(
@@ -285,12 +373,33 @@ def resolve_dub_settings(
         base_dir,
     )
 
+    piper_executable = _select(
+        overrides.piper_executable,
+        config.tts.piper_executable,
+        "piper",
+    )
+    piper_speaker = _select_optional(
+        overrides.piper_speaker,
+        config.tts.piper_speaker,
+    )
+
+    voice_profiles = _resolve_voice_profiles(
+        loaded_config.config.voices,
+        base_dir=base_dir,
+        default_tts_backend=tts_backend,
+        default_piper_model_path=piper_model_path,
+        default_piper_config_path=piper_config_path,
+        default_piper_executable=piper_executable,
+        default_piper_speaker=piper_speaker,
+    )
+
     speech_sample_rate = _resolve_speech_sample_rate(
         cli_value=overrides.speech_sample_rate,
         config_value=config.speech_sample_rate,
         tts_backend=tts_backend,
         piper_model_path=piper_model_path,
         piper_config_path=piper_config_path,
+        voice_profiles=voice_profiles,
     )
 
     diarization_min_speakers = _select_optional(
@@ -381,14 +490,9 @@ def resolve_dub_settings(
         tts_backend=tts_backend,
         piper_model_path=piper_model_path,
         piper_config_path=piper_config_path,
-        piper_executable=_select(
-            overrides.piper_executable,
-            config.tts.piper_executable,
-            "piper",
-        ),
-        piper_speaker=_select_optional(
-            overrides.piper_speaker, config.tts.piper_speaker
-        ),
+        piper_executable=piper_executable,
+        piper_speaker=piper_speaker,
+        voice_profiles=voice_profiles,
         fit_speech=_select(overrides.fit_speech, config.fit_speech.enabled, False),
         max_speech_speedup=_select(
             overrides.max_speech_speedup,

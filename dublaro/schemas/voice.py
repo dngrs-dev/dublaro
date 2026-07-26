@@ -17,7 +17,7 @@ class VoiceProfile(BaseModel):
     tts_backend: str | None = None
 
     reference_audio_paths: list[str] = Field(default_factory=list)
-    generated_smaple_path: str | None = None
+    generated_sample_path: str | None = None
 
     consent_status: ConsentStatus = ConsentStatus.UNKNOWN
     consent_note: str | None = None

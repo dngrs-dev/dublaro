@@ -72,6 +72,21 @@ class TtsConfig(BaseModel):
     piper_speaker: int | None = None
 
 
+class VoiceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = None
+    language: str | None = None
+    tts_backend: str | None = None
+
+    piper_model_path: Path | None = None
+    piper_config_path: Path | None = None
+    piper_executable: str | None = None
+    piper_speaker: int | None = None
+
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
 class FitSpeechConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,6 +157,7 @@ class DublaroConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     dub: DubConfig = DubConfig()
+    voices: dict[str, VoiceConfig] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)

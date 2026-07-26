@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
 from dublaro.pipeline.subtitles import SrtTextMode
+from dublaro.pipeline.voices import SpeakerVoice
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,7 @@ class DubAdapters:
     text_adapter: TextAdapter
     tts: TtsAdapter
     diarization: DiarizationAdapter | None = None
+    speaker_voices: Mapping[str, SpeakerVoice] | None = None
 
 
 @dataclass(frozen=True)

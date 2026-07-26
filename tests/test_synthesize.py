@@ -1,13 +1,37 @@
 import wave
 from pathlib import Path
 
-from dublaro.adapters.tts import FakeTtsAdapter
+from dublaro.adapters.tts import FakeTtsAdapter, SpeechSynthesisOptions
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
     default_synthesized_transcript_path,
     synthesize_transcript_speech,
 )
-from dublaro.schemas import Segment, Transcript
+from dublaro.pipeline.voices import SpeakerVoice
+from dublaro.schemas import Segment, Transcript, VoiceProfile
+
+
+class RecordingTtsAdapter:
+    def __init__(self, name: str, calls: list[tuple[str, str | None]]) -> None:
+        self.name = name
+        self.calls = calls
+
+    def synthesize_segment(
+        self,
+        segment: Segment,
+        output_path: Path,
+        options: SpeechSynthesisOptions,
+    ) -> Path:
+        self.calls.append((self.name, options.speaker_id))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with wave.open(str(output_path), "wb") as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(options.sample_rate)
+            audio_file.writeframes(b"\x00\x00")
+
+        return output_path
 
 
 def test_synthesize_transcript_speech_generates_audio_files(tmp_path: Path) -> None:
@@ -107,3 +131,42 @@ def test_default_speech_output_dir() -> None:
     assert default_speech_output_dir("lesson.pl.adapted.json") == Path(
         "lesson.pl.adapted.speech"
     )
+
+
+def test_synthesize_uses_speaker_voice_adapters(tmp_path: Path) -> None:
+    calls: list[tuple[str, str | None]] = []
+
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        target_language="pl",
+        segments=[
+            Segment(id="seg-1", start=0, end=1, speaker="speaker-1", adapted_text="A"),
+            Segment(id="seg-2", start=1, end=2, speaker="speaker-2", adapted_text="B"),
+            Segment(id="seg-3", start=2, end=3, adapted_text="C"),
+        ],
+    )
+
+    result = synthesize_transcript_speech(
+        transcript,
+        adapter=RecordingTtsAdapter("fallback", calls),
+        output_dir=tmp_path / "speech",
+        sample_rate=16_000,
+        speaker_voices={
+            "speaker-1": SpeakerVoice(
+                profile=VoiceProfile(speaker_id="speaker-1", tts_backend="fake"),
+                adapter=RecordingTtsAdapter("voice-1", calls),
+            ),
+            "speaker-2": SpeakerVoice(
+                profile=VoiceProfile(speaker_id="speaker-2", tts_backend="fake"),
+                adapter=RecordingTtsAdapter("voice-2", calls),
+            ),
+        },
+    )
+
+    assert calls == [
+        ("voice-1", "speaker-1"),
+        ("voice-2", "speaker-2"),
+        ("fallback", None),
+    ]
+    assert result.metadata["tts_speaker_voice_count"] == "2"

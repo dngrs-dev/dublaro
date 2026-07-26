@@ -349,6 +349,7 @@ def _synthesize_speech(
             output_dir=context.artifact_paths.speech_dir,
             language=context.options.target_language,
             sample_rate=context.options.speech_sample_rate,
+            speaker_voices=context.adapters.speaker_voices,
         )
         save_transcript(synthesized_transcript, synthesized_transcript_path)
         return synthesized_transcript

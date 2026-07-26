@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,7 @@ from dublaro.pipeline.dub_stages import (
     _write_manifest,
 )
 from dublaro.pipeline.subtitles import SrtTextMode
+from dublaro.pipeline.voices import SpeakerVoice
 
 __all__ = [
     "DubbingArtifacts",
@@ -69,6 +71,7 @@ def dub_video(
     translation_adapter: TranslationAdapter,
     text_adapter: TextAdapter,
     tts_adapter: TtsAdapter,
+    speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     diarization_adapter: DiarizationAdapter | None = None,
     diarize: bool = False,
     diarization_min_speakers: int | None = None,
@@ -139,6 +142,7 @@ def dub_video(
         translation=translation_adapter,
         text_adapter=text_adapter,
         tts=tts_adapter,
+        speaker_voices=speaker_voices,
     )
 
     context = DubRunContext(
