@@ -562,6 +562,7 @@ def _write_manifest(
             translation_adapter=adapters.translation,
             text_adapter=adapters.text_adapter,
             tts_adapter=adapters.tts,
+            speaker_voices=adapters.speaker_voices,
             options=DubbingOptionsManifest(
                 asr_sample_rate=run_options.asr_sample_rate,
                 diarize=run_options.diarize,
@@ -639,6 +640,9 @@ def _write_manifest(
                 ),
                 "final_speech_segment_count": str(
                     len(inputs.speech_timeline_transcript.segments)
+                ),
+                "configured_speaker_voice_count": str(
+                    len(adapters.speaker_voices or {})
                 ),
             },
         )

@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -5,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from dublaro import __version__
+from dublaro.pipeline.voices import SpeakerVoice
 
 JsonScalar = str | int | float | bool | None
 
@@ -34,12 +36,26 @@ class AdapterManifest(BaseModel):
     settings: dict[str, JsonScalar] = Field(default_factory=dict)
 
 
+class VoiceProfileManifest(BaseModel):
+    speaker_id: str
+    display_name: str | None = None
+    language: str | None = None
+    tts_backend: str | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class SpeakerVoiceManifest(BaseModel):
+    profile: VoiceProfileManifest
+    adapter: AdapterManifest
+
+
 class DubbingAdaptersManifest(BaseModel):
     asr: AdapterManifest
     diarization: AdapterManifest | None = None
     translation: AdapterManifest
     text_adapter: AdapterManifest
     tts: AdapterManifest
+    speaker_voices: dict[str, SpeakerVoiceManifest] = Field(default_factory=dict)
 
 
 class DubbingOptionsManifest(BaseModel):
@@ -114,6 +130,7 @@ def build_dubbing_manifest(
     translation_adapter: object,
     text_adapter: object,
     tts_adapter: object,
+    speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     options: DubbingOptionsManifest,
     artifacts: DubbingArtifactsManifest,
     metadata: dict[str, str] | None = None,
@@ -138,6 +155,10 @@ def build_dubbing_manifest(
             translation=describe_adapter(translation_adapter),
             text_adapter=describe_adapter(text_adapter),
             tts=describe_adapter(tts_adapter),
+            speaker_voices={
+                speaker_id: describe_speaker_voice(speaker_voice)
+                for speaker_id, speaker_voice in (speaker_voices or {}).items()
+            },
         ),
         options=options,
         artifacts=artifacts,
@@ -156,6 +177,21 @@ def save_manifest(
         encoding="utf-8",
     )
     return output_file
+
+
+def describe_speaker_voice(speaker_voice: SpeakerVoice) -> SpeakerVoiceManifest:
+    profile = speaker_voice.profile
+
+    return SpeakerVoiceManifest(
+        profile=VoiceProfileManifest(
+            speaker_id=profile.speaker_id,
+            display_name=profile.display_name,
+            language=profile.language,
+            tts_backend=profile.tts_backend,
+            metadata=dict(profile.metadata),
+        ),
+        adapter=describe_adapter(speaker_voice.adapter),
+    )
 
 
 def describe_adapter(adapter: object) -> AdapterManifest:

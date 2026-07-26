@@ -11,7 +11,8 @@ from dublaro.audio.wav import write_mono_pcm16_wav
 from dublaro.pipeline import dub_stages
 from dublaro.pipeline.dub import dub_video
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
-from dublaro.schemas import Segment, Transcript
+from dublaro.pipeline.voices import SpeakerVoice
+from dublaro.schemas import Segment, Transcript, VoiceProfile
 
 
 class ExplodingAsrAdapter:
@@ -40,6 +41,17 @@ class ExplodingTtsAdapter:
 
     def synthesize_segment(self, *args: object, **kwargs: object) -> Path:
         raise AssertionError("TTS should not run during resume")
+
+
+class ManifestTtsAdapter(FakeTtsAdapter):
+    name = "piper"
+
+    def __init__(self, model_path: str) -> None:
+        self.model_path = Path(model_path)
+        self.config_path = Path(f"{model_path}.json")
+        self.executable = "piper"
+        self.speaker = None
+        self.model_sample_rate = 16_000
 
 
 def test_dub_video_runs_full_pipeline(
@@ -657,6 +669,19 @@ def test_dub_video_writes_manifest_by_default(
     )
     monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
 
+    speaker_voices = {
+        "speaker-1": SpeakerVoice(
+            profile=VoiceProfile(
+                speaker_id="speaker-1",
+                display_name="Speaker 1",
+                language="pl",
+                tts_backend="piper",
+                metadata={"role": "host"},
+            ),
+            adapter=ManifestTtsAdapter("models/piper/speaker-1.onnx"),
+        )
+    }
+
     artifacts = dub_video(
         video_path,
         output_path,
@@ -667,6 +692,7 @@ def test_dub_video_writes_manifest_by_default(
         translation_adapter=FakeTranslationAdapter(),
         text_adapter=FakeTextAdapter(),
         tts_adapter=FakeTtsAdapter(),
+        speaker_voices=speaker_voices,
         overwrite=True,
     )
 
@@ -684,6 +710,21 @@ def test_dub_video_writes_manifest_by_default(
     assert data["adapters"]["translation"]["name"] == "fake-translation"
     assert data["adapters"]["text_adapter"]["name"] == "fake-text-adapter"
     assert data["adapters"]["tts"]["name"] == "fake-tts"
+    speaker_voice = data["adapters"]["speaker_voices"]["speaker-1"]
+
+    assert speaker_voice["profile"] == {
+        "speaker_id": "speaker-1",
+        "display_name": "Speaker 1",
+        "language": "pl",
+        "tts_backend": "piper",
+        "metadata": {"role": "host"},
+    }
+    assert speaker_voice["adapter"]["name"] == "piper"
+    assert speaker_voice["adapter"]["settings"]["model_path"] == str(
+        Path("models/piper/speaker-1.onnx")
+    )
+    assert speaker_voice["adapter"]["settings"]["model_sample_rate"] == 16_000
+    assert data["metadata"]["configured_speaker_voice_count"] == "1"
     assert data["options"]["translation_group_segments"] is True
     assert data["artifacts"]["dubbed_video_path"] == str(output_path)
     assert data["artifacts"]["manifest_path"] == str(manifest_path)
