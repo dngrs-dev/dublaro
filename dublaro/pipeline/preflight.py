@@ -1,6 +1,7 @@
 import importlib
 import shutil
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -14,6 +15,14 @@ class PreflightIssue:
     code: str
     message: str
     hint: str | None = None
+
+
+@dataclass(frozen=True)
+class SpeakerVoicePreflightSettings:
+    tts_backend: str
+    piper_model_path: str | Path | None = None
+    piper_config_path: str | Path | None = None
+    piper_executable: str = "piper"
 
 
 @dataclass(frozen=True)
@@ -53,6 +62,7 @@ def validate_dub_preflight(
     piper_model_path: str | Path | None = None,
     piper_config_path: str | Path | None = None,
     piper_executable: str = "piper",
+    speaker_voices: Mapping[str, SpeakerVoicePreflightSettings] | None = None,
     export_srt: bool = False,
     srt_output_path: str | Path | None = None,
     write_manifest: bool = True,
@@ -90,13 +100,30 @@ def validate_dub_preflight(
         )
 
     _check_ffmpeg(issues, ffmpeg_executable)
+    checked_piper_executables: set[str] = set()
     _check_piper(
         issues,
         tts_backend=tts_backend,
         piper_model_path=piper_model_path,
         piper_config_path=piper_config_path,
         piper_executable=piper_executable,
+        checked_executables=checked_piper_executables,
     )
+
+    for speaker_id, speaker_voice in (speaker_voices or {}).items():
+        _check_piper(
+            issues,
+            tts_backend=speaker_voice.tts_backend,
+            piper_model_path=speaker_voice.piper_model_path,
+            piper_config_path=speaker_voice.piper_config_path,
+            piper_executable=speaker_voice.piper_executable,
+            label=f'Speaker voice "{speaker_id}" Piper',
+            missing_model_message=(
+                f'Piper model is required for speaker voice "{speaker_id}" '
+                "when its TTS backend is piper."
+            ),
+            checked_executables=checked_piper_executables,
+        )
     _check_argos(
         issues,
         asr_backend=asr_backend,
@@ -241,6 +268,9 @@ def _check_piper(
     piper_model_path: str | Path | None,
     piper_config_path: str | Path | None,
     piper_executable: str,
+    label: str = "Piper",
+    missing_model_message: str = "--piper-model is required when --tts piper.",
+    checked_executables: set[str] | None = None,
 ) -> None:
     if tts_backend != "piper":
         return
@@ -249,19 +279,25 @@ def _check_piper(
         _add_error(
             issues,
             "piper_model_missing",
-            "--piper-model is required when --tts piper.",
+            missing_model_message,
         )
     else:
-        _check_input_file(issues, "Piper model", Path(piper_model_path))
+        _check_input_file(issues, f"{label} model", Path(piper_model_path))
 
     if piper_config_path is not None:
-        _check_input_file(issues, "Piper config", Path(piper_config_path))
+        _check_input_file(issues, f"{label} config", Path(piper_config_path))
+
+    if checked_executables is not None:
+        if piper_executable in checked_executables:
+            return
+
+        checked_executables.add(piper_executable)
 
     if shutil.which(piper_executable) is None:
         _add_error(
             issues,
             "piper_executable_missing",
-            f"Piper executable was not found: {piper_executable}",
+            f"{label} executable was not found: {piper_executable}",
             "Install Piper or pass --piper-executable with the full path.",
         )
 

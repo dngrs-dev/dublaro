@@ -5,7 +5,10 @@ from types import ModuleType
 
 import pytest
 from dublaro.pipeline import preflight as preflight_module
-from dublaro.pipeline.preflight import validate_dub_preflight
+from dublaro.pipeline.preflight import (
+    SpeakerVoicePreflightSettings,
+    validate_dub_preflight,
+)
 
 
 def stub_ffmpeg_ok(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,3 +217,48 @@ def test_dub_preflight_allows_existing_srt_and_manifest_when_resuming(
 
     assert report.passed
     assert report.issues == ()
+
+
+def test_dub_preflight_checks_speaker_voice_piper_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub_ffmpeg_ok(monkeypatch)
+
+    video_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "output.mp4"
+    video_path.write_bytes(b"fake video")
+
+    report = validate_dub_preflight(
+        video_path=video_path,
+        output_path=output_path,
+        workspace_dir=tmp_path / "workspace",
+        overwrite=False,
+        ffmpeg_executable="ffmpeg",
+        asr_backend="fake",
+        translation_backend="fake",
+        source_language="en",
+        target_language="pl",
+        install_translation_package=False,
+        tts_backend="fake",
+        speaker_voices={
+            "SPEAKER_00": SpeakerVoicePreflightSettings(
+                tts_backend="piper",
+                piper_model_path=tmp_path / "missing.onnx",
+                piper_config_path=tmp_path / "missing.onnx.json",
+                piper_executable="piper",
+            )
+        },
+    )
+
+    messages = [issue.message for issue in report.errors]
+
+    assert not report.passed
+    assert any(
+        'Speaker voice "SPEAKER_00" Piper model does not exist' in message
+        for message in messages
+    )
+    assert any(
+        'Speaker voice "SPEAKER_00" Piper config does not exist' in message
+        for message in messages
+    )

@@ -60,7 +60,11 @@ from dublaro.pipeline.mix import (
     default_mixed_audio_path,
     mix_original_audio_with_dubbed_speech,
 )
-from dublaro.pipeline.preflight import DubPreflightReport, validate_dub_preflight
+from dublaro.pipeline.preflight import (
+    DubPreflightReport,
+    SpeakerVoicePreflightSettings,
+    validate_dub_preflight,
+)
 from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
@@ -232,6 +236,20 @@ def create_speaker_voices(
         )
 
     return speaker_voices
+
+
+def create_speaker_voice_preflight_settings(
+    profiles: dict[str, ResolvedVoiceProfileSettings],
+) -> dict[str, SpeakerVoicePreflightSettings]:
+    return {
+        speaker_id: SpeakerVoicePreflightSettings(
+            tts_backend=profile.tts_backend,
+            piper_model_path=profile.piper_model_path,
+            piper_config_path=profile.piper_config_path,
+            piper_executable=profile.piper_executable,
+        )
+        for speaker_id, profile in profiles.items()
+    }
 
 
 def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
@@ -1638,6 +1656,9 @@ def dub(
             piper_model_path=settings.piper_model_path,
             piper_config_path=settings.piper_config_path,
             piper_executable=settings.piper_executable,
+            speaker_voices=create_speaker_voice_preflight_settings(
+                settings.voice_profiles
+            ),
             export_srt=settings.export_srt,
             srt_output_path=settings.srt_output_path,
             write_manifest=settings.write_manifest,
