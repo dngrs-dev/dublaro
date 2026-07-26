@@ -1,6 +1,7 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 
-from dublaro.schemas import Transcript
+from dublaro.schemas import Segment, Transcript
 
 UNASSIGNED_SPEAKER_ID = "unassigned"
 
@@ -31,12 +32,44 @@ def summarize_transcript_speakers(transcript: Transcript) -> list[SpeakerSummary
     ]
 
     return sorted(
-        summaries, key=lambda summary: (summary.first_start, summary.speaker_id)
+        summaries,
+        key=lambda summary: (summary.first_start, summary.speaker_id),
     )
 
 
-def _group_segments_by_speaker(transcript: Transcript):
-    segments_by_speaker = {}
+def find_unconfigured_speakers(
+    transcript: Transcript,
+    configured_speaker_ids: Iterable[str],
+) -> list[str]:
+    configured = set(configured_speaker_ids)
+
+    return [
+        summary.speaker_id
+        for summary in summarize_transcript_speakers(transcript)
+        if summary.speaker_id != UNASSIGNED_SPEAKER_ID
+        and summary.speaker_id not in configured
+    ]
+
+
+def find_unused_voice_profiles(
+    transcript: Transcript,
+    configured_speaker_ids: Iterable[str],
+) -> list[str]:
+    detected = {
+        summary.speaker_id
+        for summary in summarize_transcript_speakers(transcript)
+        if summary.speaker_id != UNASSIGNED_SPEAKER_ID
+    }
+
+    return [
+        speaker_id
+        for speaker_id in configured_speaker_ids
+        if speaker_id not in detected
+    ]
+
+
+def _group_segments_by_speaker(transcript: Transcript) -> dict[str, list[Segment]]:
+    segments_by_speaker: dict[str, list[Segment]] = {}
 
     for segment in transcript.sorted_segments():
         speaker_id = segment.speaker or UNASSIGNED_SPEAKER_ID

@@ -328,6 +328,48 @@ piper_model_path = "models/host.onnx"
     assert "host.onnx" in result.output
 
 
+def test_preview_speakers_command_warns_for_speaker_voice_mismatches(
+    tmp_path: Path,
+) -> None:
+    transcript_path = tmp_path / "audio.json"
+    config_path = tmp_path / "dublaro.toml"
+
+    save_transcript(
+        Transcript(
+            id="audio",
+            source_language="en",
+            segments=[
+                Segment(id="seg-1", start=0.0, end=1.0, speaker="SPEAKER_00"),
+                Segment(id="seg-2", start=1.0, end=2.0, speaker="SPEAKER_02"),
+            ],
+        ),
+        transcript_path,
+    )
+
+    config_path.write_text(
+        """
+[voices."SPEAKER_00"]
+tts_backend = "fake"
+
+[voices."SPEAKER_99"]
+tts_backend = "fake"
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["preview-speakers", str(transcript_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "No configured voice profile" in result.output
+    assert "SPEAKER_02" in result.output
+    assert "fallback TTS" in result.output
+    assert "Configured voice profiles not present" in result.output
+    assert "SPEAKER_99" in result.output
+
+
 def test_adapt_text_command_writes_adapted_transcript(tmp_path: Path) -> None:
     transcript_path = tmp_path / "audio.pl.json"
     output_path = tmp_path / "audio.pl.adapted.json"

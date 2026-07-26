@@ -71,7 +71,12 @@ from dublaro.pipeline.preflight import (
     SpeakerVoicePreflightSettings,
     validate_dub_preflight,
 )
-from dublaro.pipeline.speakers import SpeakerSummary, summarize_transcript_speakers
+from dublaro.pipeline.speakers import (
+    SpeakerSummary,
+    find_unconfigured_speakers,
+    find_unused_voice_profiles,
+    summarize_transcript_speakers,
+)
 from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
@@ -728,6 +733,15 @@ def preview_speakers(
         transcript = load_transcript(transcript_path)
         loaded_config = load_config(config_path)
         summaries = summarize_transcript_speakers(transcript)
+        configured_speaker_ids = tuple(loaded_config.config.voices)
+        unconfigured_speakers = find_unconfigured_speakers(
+            transcript,
+            configured_speaker_ids,
+        )
+        unused_voice_profiles = find_unused_voice_profiles(
+            transcript,
+            configured_speaker_ids,
+        )
     except (DublaroConfigError, FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
@@ -756,6 +770,19 @@ def preview_speakers(
         )
 
     console.print(table)
+
+    if configured_speaker_ids and unconfigured_speakers:
+        console.print(
+            "[yellow]Warning:[/yellow] No configured voice profile for detected "
+            f"speakers: {', '.join(unconfigured_speakers)}. "
+            "They will use fallback TTS."
+        )
+
+    if unused_voice_profiles:
+        console.print(
+            "[yellow]Warning:[/yellow] Configured voice profiles not present in "
+            f"transcript: {', '.join(unused_voice_profiles)}."
+        )
 
 
 @app.command("adapt-text")
