@@ -283,6 +283,51 @@ def test_preview_units_command_shows_grouped_segments(tmp_path: Path) -> None:
     assert "Next point." in result.output
 
 
+def test_preview_speakers_command_shows_voice_routes(tmp_path: Path) -> None:
+    transcript_path = tmp_path / "audio.json"
+    config_path = tmp_path / "dublaro.toml"
+
+    save_transcript(
+        Transcript(
+            id="audio",
+            source_language="en",
+            segments=[
+                Segment(id="seg-1", start=0.0, end=1.0, speaker="SPEAKER_00"),
+                Segment(id="seg-2", start=1.5, end=2.5, speaker="SPEAKER_01"),
+                Segment(id="seg-3", start=3.0, end=4.0, speaker="SPEAKER_00"),
+            ],
+        ),
+        transcript_path,
+    )
+
+    config_path.write_text(
+        """
+[dub.tts]
+backend = "fake"
+
+[voices."SPEAKER_00"]
+display_name = "Host"
+tts_backend = "piper"
+piper_model_path = "models/host.onnx"
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        cli.app,
+        ["preview-speakers", str(transcript_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Speakers" in result.output
+    assert "SPEAKER_00" in result.output
+    assert "SPEAKER_01" in result.output
+    assert "Host" in result.output
+    assert "configured" in result.output
+    assert "fallback" in result.output
+    assert "host.onnx" in result.output
+
+
 def test_adapt_text_command_writes_adapted_transcript(tmp_path: Path) -> None:
     transcript_path = tmp_path / "audio.pl.json"
     output_path = tmp_path / "audio.pl.adapted.json"

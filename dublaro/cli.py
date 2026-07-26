@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -33,7 +34,12 @@ from dublaro.cli_config import (
     ResolvedVoiceProfileSettings,
     resolve_dub_settings,
 )
-from dublaro.config import DublaroConfigError, load_config
+from dublaro.config import (
+    DublaroConfigError,
+    LoadedConfig,
+    load_config,
+    resolve_config_path,
+)
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
     default_adapted_transcript_path,
@@ -65,6 +71,7 @@ from dublaro.pipeline.preflight import (
     SpeakerVoicePreflightSettings,
     validate_dub_preflight,
 )
+from dublaro.pipeline.speakers import SpeakerSummary, summarize_transcript_speakers
 from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
@@ -250,6 +257,83 @@ def create_speaker_voice_preflight_settings(
         )
         for speaker_id, profile in profiles.items()
     }
+
+
+@dataclass(frozen=True)
+class SpeakerVoicePreview:
+    source: str
+    display_name: str | None
+    tts_backend: str
+    piper_model_path: Path | None
+    piper_config_path: Path | None
+    piper_speaker: int | None
+
+
+def preview_speaker_voice(
+    speaker_id: str,
+    loaded_config: LoadedConfig,
+) -> SpeakerVoicePreview:
+    config = loaded_config.config
+    base_dir = loaded_config.base_dir
+    fallback_tts = config.dub.tts
+    voice_config = config.voices.get(speaker_id)
+
+    if voice_config is None:
+        return SpeakerVoicePreview(
+            source="fallback",
+            display_name=None,
+            tts_backend=fallback_tts.backend or "fake",
+            piper_model_path=resolve_config_path(
+                fallback_tts.piper_model_path, base_dir
+            ),
+            piper_config_path=resolve_config_path(
+                fallback_tts.piper_config_path, base_dir
+            ),
+            piper_speaker=fallback_tts.piper_speaker,
+        )
+
+    return SpeakerVoicePreview(
+        source="configured",
+        display_name=voice_config.display_name,
+        tts_backend=voice_config.tts_backend or fallback_tts.backend or "fake",
+        piper_model_path=(
+            resolve_config_path(voice_config.piper_model_path, base_dir)
+            or resolve_config_path(fallback_tts.piper_model_path, base_dir)
+        ),
+        piper_config_path=(
+            resolve_config_path(voice_config.piper_config_path, base_dir)
+            or resolve_config_path(fallback_tts.piper_config_path, base_dir)
+        ),
+        piper_speaker=(
+            voice_config.piper_speaker
+            if voice_config.piper_speaker is not None
+            else fallback_tts.piper_speaker
+        ),
+    )
+
+
+def format_speaker_window(summary: SpeakerSummary) -> str:
+    return f"{summary.first_start:.2f}-{summary.last_end:.2f}s"
+
+
+def format_voice_route(preview: SpeakerVoicePreview) -> str:
+    parts = [preview.source]
+
+    if preview.display_name:
+        parts.append(preview.display_name)
+
+    parts.append(preview.tts_backend)
+
+    if preview.tts_backend == "piper":
+        if preview.piper_model_path is None:
+            parts.append("(missing model)")
+        else:
+            parts.append(str(preview.piper_model_path))
+
+        if preview.piper_speaker is not None:
+            parts.append(f"speaker={preview.piper_speaker}")
+
+    return " | ".join(parts)
 
 
 def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
@@ -613,6 +697,62 @@ def preview_units(
             f"{group.duration:.2f}s",
             group.speaker or "",
             Text(group.source_text),
+        )
+
+    console.print(table)
+
+
+@app.command("preview-speakers")
+def preview_speakers(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input transcript JSON file.",
+        ),
+    ],
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to dublaro.toml config file.",
+        ),
+    ] = None,
+) -> None:
+    """Preview detected speakers and configured voice routing."""
+    try:
+        transcript = load_transcript(transcript_path)
+        loaded_config = load_config(config_path)
+        summaries = summarize_transcript_speakers(transcript)
+    except (DublaroConfigError, FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(
+        "[green]Speakers:[/green] "
+        f"{len(summaries)} from {len(transcript.segments)} segments"
+    )
+
+    table = Table(title="Speaker Preview")
+    table.add_column("Speaker", no_wrap=True)
+    table.add_column("Segments", justify="right", no_wrap=True)
+    table.add_column("Speaking Time", justify="right", no_wrap=True)
+    table.add_column("Window", no_wrap=True)
+    table.add_column("Voice Route", overflow="fold", ratio=4)
+
+    for summary in summaries:
+        voice_preview = preview_speaker_voice(summary.speaker_id, loaded_config)
+
+        table.add_row(
+            summary.speaker_id,
+            str(summary.segment_count),
+            f"{summary.total_duration_seconds:.2f}s",
+            format_speaker_window(summary),
+            Text(format_voice_route(voice_preview)),
         )
 
     console.print(table)
