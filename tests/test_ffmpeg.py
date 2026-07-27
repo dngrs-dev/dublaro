@@ -9,6 +9,8 @@ from dublaro.audio.ffmpeg import (
     change_audio_tempo,
     extract_audio_from_video,
     replace_video_audio,
+    replace_video_audio_with_hard_subtitles,
+    replace_video_audio_with_soft_subtitles,
     run_ffmpeg,
 )
 
@@ -148,6 +150,100 @@ def test_replace_video_audio_uses_expected_ffmpeg_arguments(
     assert "aac" in args
     assert "-shortest" in args
     assert output_path in args
+
+
+def test_replace_video_audio_with_soft_subtitles_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "speech.wav"
+    subtitle_path = tmp_path / "subs.srt"
+    output_path = tmp_path / "dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+    audio_path.write_bytes(b"fake audio")
+    subtitle_path.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8"
+    )
+
+    calls: list[list[str | Path]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = replace_video_audio_with_soft_subtitles(
+        video_path,
+        audio_path,
+        subtitle_path,
+        output_path,
+        subtitle_language="pl",
+    )
+
+    assert result == output_path
+
+    args = calls[0]
+
+    assert video_path in args
+    assert audio_path in args
+    assert subtitle_path in args
+    assert "2:0" in args
+    assert "-c:s" in args
+    assert "mov_text" in args
+    assert "-metadata:s:s:0" in args
+    assert "language=pl" in args
+    assert output_path in args
+
+
+def test_replace_video_audio_with_hard_subtitles_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    audio_path = tmp_path / "speech.wav"
+    subtitle_path = tmp_path / "subs.srt"
+    output_path = tmp_path / "dubbed.mp4"
+
+    video_path.write_bytes(b"fake video")
+    audio_path.write_bytes(b"fake audio")
+    subtitle_path.write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8"
+    )
+
+    calls: list[tuple[list[str | Path], str | Path | None]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+        cwd: str | Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((args, cwd))
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = replace_video_audio_with_hard_subtitles(
+        video_path,
+        audio_path,
+        subtitle_path,
+        output_path,
+    )
+
+    assert result == output_path
+
+    args, cwd = calls[0]
+
+    assert cwd == subtitle_path.parent.resolve()
+    assert "-vf" in args
+    assert f"subtitles=filename='{subtitle_path.name}'" in args
 
 
 def test_replace_video_audio_rejects_existing_output_without_overwrite(

@@ -79,6 +79,7 @@ class DubbingOptionsManifest(BaseModel):
     max_translation_group_duration_seconds: float
     export_srt: bool
     srt_text_mode: str
+    subtitle_embed: str
     ffmpeg_executable: str
     overwrite: bool
 
@@ -99,6 +100,7 @@ class DubbingArtifactsManifest(BaseModel):
     mix_original_audio_path: str | None = None
     mixed_audio_path: str | None = None
     srt_path: str | None = None
+    embedded_srt_path: str | None = None
     manifest_path: str | None = None
 
 

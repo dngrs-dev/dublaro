@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from dublaro.pipeline.subtitles import SrtTextMode
+from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
 
 class DublaroConfigError(ValueError):
@@ -112,6 +112,7 @@ class SrtConfig(BaseModel):
     export: bool | None = None
     output_path: Path | None = None
     text_mode: SrtTextMode | None = None
+    embed: SubtitleEmbedMode | None = None
 
 
 class ManifestConfig(BaseModel):

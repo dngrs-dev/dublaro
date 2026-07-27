@@ -26,6 +26,7 @@ def run_ffmpeg(
     args: Sequence[str | Path],
     *,
     executable: str = "ffmpeg",
+    cwd: str | Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [find_ffmpeg(executable), *[str(arg) for arg in args]]
 
@@ -34,6 +35,7 @@ def run_ffmpeg(
         check=False,
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
 
     if result.returncode != 0:
@@ -98,27 +100,123 @@ def extract_audio_from_video(
     return output_file
 
 
-def replace_video_audio(
+def replace_video_audio_with_soft_subtitles(
     video_path: str | Path,
     audio_path: str | Path,
+    subtitle_path: str | Path,
+    output_path: str | Path,
+    *,
+    subtitle_language: str | None = None,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    video_file, audio_file, output_file = _validate_video_audio_output(
+        video_path, audio_path, output_path, overwrite
+    )
+    subtitle_file = _check_subtitle_file(subtitle_path)
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    args: list[str | Path] = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        overwrite_flag,
+        "-i",
+        video_file,
+        "-i",
+        audio_file,
+        "-i",
+        subtitle_file,
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-map",
+        "2:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-c:s",
+        _soft_subtitle_codec(output_file),
+        "-shortest",
+    ]
+
+    if subtitle_language:
+        args.extend(["-metadata:s:s:0", f"language={subtitle_language}"])
+
+    args.append(output_file)
+    run_ffmpeg(args, executable=executable)
+    return output_file
+
+
+def replace_video_audio_with_hard_subtitles(
+    video_path: str | Path,
+    audio_path: str | Path,
+    subtitle_path: str | Path,
     output_path: str | Path,
     *,
     overwrite: bool = False,
     executable: str = "ffmpeg",
 ) -> Path:
+    video_file, audio_file, output_file = _validate_video_audio_output(
+        video_path, audio_path, output_path, overwrite
+    )
+    subtitle_file = _check_subtitle_file(subtitle_path)
+    subtitle_dir = subtitle_file.parent.resolve()
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    run_ffmpeg(
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            overwrite_flag,
+            "-i",
+            video_file.resolve(),
+            "-i",
+            audio_file.resolve(),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-vf",
+            _subtitles_filter_argument(subtitle_file.name),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            output_file.resolve(),
+        ],
+        executable=executable,
+        cwd=subtitle_dir,
+    )
+    return output_file
+
+
+def _validate_video_audio_output(
+    video_path: str | Path,
+    audio_path: str | Path,
+    output_path: str | Path,
+    overwrite: bool,
+) -> tuple[Path, Path, Path]:
     video_file = Path(video_path)
     audio_file = Path(audio_path)
     output_file = Path(output_path)
 
     if not video_file.exists():
         raise FileNotFoundError(f"Video file does not exist: {video_file}")
-
     if not video_file.is_file():
         raise ValueError(f"Video path is not a file: {video_file}")
-
     if not audio_file.exists():
         raise FileNotFoundError(f"Audio file does not exist: {audio_file}")
-
     if not audio_file.is_file():
         raise ValueError(f"Audio path is not a file: {audio_file}")
 
@@ -129,6 +227,55 @@ def replace_video_audio(
             f"Output file already exists: {output_file}. "
             "Use overwrite=True to replace it."
         )
+
+    return video_file, audio_file, output_file
+
+
+def _check_subtitle_file(path: str | Path) -> Path:
+    subtitle_file = Path(path)
+
+    if not subtitle_file.exists():
+        raise FileNotFoundError(f"Subtitle file does not exist: {subtitle_file}")
+    if not subtitle_file.is_file():
+        raise ValueError(f"Subtitle path is not a file: {subtitle_file}")
+
+    return subtitle_file
+
+
+def _soft_subtitle_codec(output_path: Path) -> str:
+    if output_path.suffix.lower() in {".mp4", ".m4v", ".mov"}:
+        return "mov_text"
+    return "srt"
+
+
+def _subtitles_filter_argument(filename: str) -> str:
+    return f"subtitles=filename={_escape_filter_value(filename)}"
+
+
+def _escape_filter_value(value: str) -> str:
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace(":", "\\:")
+        .replace(",", "\\,")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace(";", "\\;")
+    )
+    return f"'{escaped}'"
+
+
+def replace_video_audio(
+    video_path: str | Path,
+    audio_path: str | Path,
+    output_path: str | Path,
+    *,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    video_file, audio_file, output_file = _validate_video_audio_output(
+        video_path, audio_path, output_path, overwrite
+    )
 
     overwrite_flag = "-y" if overwrite else "-n"
 

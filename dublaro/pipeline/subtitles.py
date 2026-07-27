@@ -4,6 +4,7 @@ from typing import Literal
 from dublaro.schemas import Segment, Transcript
 
 SrtTextMode = Literal["auto", "source", "translated", "adapted"]
+SubtitleEmbedMode = Literal["none", "soft", "hard"]
 
 
 def transcript_to_srt(

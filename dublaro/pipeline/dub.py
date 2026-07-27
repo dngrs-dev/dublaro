@@ -18,17 +18,17 @@ from dublaro.pipeline.dub_stages import (
     _adapt_translated_text,
     _align_speech_track,
     _diarize_source_transcript,
-    _export_srt,
     _export_video,
     _extract_audio,
     _fit_speech_to_timing,
     _prepare_audio_for_export,
+    _prepare_subtitles_for_export,
     _synthesize_speech,
     _transcribe_source_audio,
     _translate_source_transcript,
     _write_manifest,
 )
-from dublaro.pipeline.subtitles import SrtTextMode
+from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
 
 __all__ = [
@@ -57,6 +57,7 @@ class DubbingArtifacts:
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
+    embedded_srt_path: Path | None
     manifest_path: Path | None
 
 
@@ -93,6 +94,7 @@ def dub_video(
     export_srt: bool = False,
     srt_output_path: str | Path | None = None,
     srt_text_mode: SrtTextMode = "adapted",
+    subtitle_embed: SubtitleEmbedMode = "none",
     write_manifest: bool = True,
     manifest_output_path: str | Path | None = None,
     progress_callback: DubbingProgressCallback | None = None,
@@ -128,6 +130,7 @@ def dub_video(
         export_srt=export_srt,
         srt_output_path=Path(srt_output_path) if srt_output_path is not None else None,
         srt_text_mode=srt_text_mode,
+        subtitle_embed=subtitle_embed,
         write_manifest=write_manifest,
         manifest_output_path=(
             Path(manifest_output_path) if manifest_output_path is not None else None
@@ -203,9 +206,19 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     mix_original_audio_path = export_audio.mix_original_audio_path
     mixed_audio_path = export_audio.mixed_audio_path
 
-    dubbed_video_path = _export_video(context, audio_for_export_path)
+    subtitle_export = _prepare_subtitles_for_export(
+        context,
+        speech_timeline_transcript,
+    )
 
-    srt_path = _export_srt(context, speech_timeline_transcript)
+    dubbed_video_path = _export_video(
+        context,
+        audio_for_export_path,
+        subtitle_export.embedded_srt_path,
+    )
+
+    srt_path = subtitle_export.sidecar_srt_path
+    embedded_srt_path = subtitle_export.embedded_srt_path
 
     manifest_inputs = ManifestInputs(
         started_at=started_at,
@@ -223,6 +236,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,
+        embedded_srt_path=embedded_srt_path,
         source_transcript=source_transcript,
         translated_transcript=translated_transcript,
         adapted_transcript=adapted_transcript,
@@ -247,5 +261,6 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,
+        embedded_srt_path=embedded_srt_path,
         manifest_path=manifest_path,
     )

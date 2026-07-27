@@ -77,7 +77,12 @@ from dublaro.pipeline.speakers import (
     find_unused_voice_profiles,
     summarize_transcript_speakers,
 )
-from dublaro.pipeline.subtitles import SrtTextMode, default_srt_path, save_srt
+from dublaro.pipeline.subtitles import (
+    SrtTextMode,
+    SubtitleEmbedMode,
+    default_srt_path,
+    save_srt,
+)
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,
     default_synthesized_transcript_path,
@@ -350,6 +355,15 @@ def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
         )
 
     return cast(SrtTextMode, text_mode)
+
+
+def parse_subtitle_embed_mode(mode: str) -> SubtitleEmbedMode:
+    allowed_modes = {"none", "soft", "hard"}
+
+    if mode not in allowed_modes:
+        raise typer.BadParameter("Subtitle embed must be one of: none, soft, hard.")
+
+    return cast(SubtitleEmbedMode, mode)
 
 
 def print_preflight_report(report: DubPreflightReport) -> None:
@@ -1702,6 +1716,13 @@ def dub(
             help="SRT text: auto, source, translated, or adapted.",
         ),
     ] = None,
+    subtitle_embed: Annotated[
+        str | None,
+        typer.Option(
+            "--subtitle-embed",
+            help="Embed subtitles into output video: none, soft, or hard.",
+        ),
+    ] = None,
     write_manifest_enabled: Annotated[
         bool | None,
         typer.Option(
@@ -1790,11 +1811,13 @@ def dub(
                 export_srt=export_srt_enabled,
                 srt_output_path=srt_output_path,
                 srt_text_mode=srt_text_mode,
+                subtitle_embed=subtitle_embed,
                 write_manifest=write_manifest_enabled,
                 manifest_output_path=manifest_output_path,
             ),
         )
         parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
+        parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
 
         if settings.manifest_output_path is not None and not settings.write_manifest:
             raise ValueError(
@@ -1893,6 +1916,7 @@ def dub(
             export_srt=settings.export_srt,
             srt_output_path=settings.srt_output_path,
             srt_text_mode=parsed_srt_text_mode,
+            subtitle_embed=parsed_subtitle_embed,
             progress_callback=print_dub_progress,
             write_manifest=settings.write_manifest,
             manifest_output_path=settings.manifest_output_path,

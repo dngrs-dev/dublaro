@@ -89,6 +89,9 @@ def test_dub_video_runs_full_pipeline(
         speech_track_path,
         output_path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite=False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -215,6 +218,9 @@ def test_dub_video_can_fit_speech_before_alignment(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -355,6 +361,9 @@ def test_dub_video_can_mix_original_audio_before_export(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -481,6 +490,9 @@ def test_dub_video_can_export_srt(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -523,6 +535,88 @@ def test_dub_video_can_export_srt(
     )
 
 
+def test_dub_video_can_soft_embed_subtitles_without_sidecar_srt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    export_calls: list[dict[str, object]] = []
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        export_calls.append(
+            {
+                "subtitle_path": subtitle_path,
+                "subtitle_embed": subtitle_embed,
+                "subtitle_language": subtitle_language,
+            }
+        )
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        return output_file
+
+    monkeypatch.setattr(
+        dub_stages,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        subtitle_embed="soft",
+        overwrite=True,
+    )
+
+    assert artifacts.srt_path is None
+    assert artifacts.embedded_srt_path == workspace_dir / "lesson.pl.embed.srt"
+    assert artifacts.embedded_srt_path is not None
+    assert artifacts.embedded_srt_path.exists()
+    assert export_calls == [
+        {
+            "subtitle_path": workspace_dir / "lesson.pl.embed.srt",
+            "subtitle_embed": "soft",
+            "subtitle_language": "pl",
+        }
+    ]
+
+
 def test_dub_video_reports_progress(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -554,6 +648,9 @@ def test_dub_video_reports_progress(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -657,6 +754,9 @@ def test_dub_video_writes_manifest_by_default(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:
@@ -840,6 +940,9 @@ def test_dub_video_resumes_intermediate_artifacts_but_regenerates_final_video(
         speech_track_path: str | Path,
         output_path: str | Path,
         *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Path:

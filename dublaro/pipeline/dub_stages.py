@@ -84,6 +84,12 @@ class ExportAudioResult:
 
 
 @dataclass(frozen=True)
+class SubtitleExportResult:
+    sidecar_srt_path: Path | None = None
+    embedded_srt_path: Path | None = None
+
+
+@dataclass(frozen=True)
 class ManifestInputs:
     started_at: datetime
     extracted_audio_path: Path
@@ -100,6 +106,7 @@ class ManifestInputs:
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
+    embedded_srt_path: Path | None
     source_transcript: Transcript
     translated_transcript: Transcript
     adapted_transcript: Transcript
@@ -499,6 +506,7 @@ def _prepare_audio_for_export(
 def _export_video(
     context: DubRunContext,
     audio_for_export_path: Path,
+    subtitle_path: Path | None,
 ) -> Path:
     with _progress_stage(
         context.progress_callback,
@@ -509,27 +517,46 @@ def _export_video(
             context.paths.video_path,
             audio_for_export_path,
             context.paths.output_path,
+            subtitle_path=subtitle_path,
+            subtitle_embed=context.options.subtitle_embed,
+            subtitle_language=context.options.target_language,
             overwrite=context.options.overwrite,
             executable=context.options.ffmpeg_executable,
         )
 
 
-def _export_srt(
+def _prepare_subtitles_for_export(
     context: DubRunContext,
     speech_timeline_transcript: Transcript,
-) -> Path | None:
-    if not context.options.export_srt:
-        return None
+) -> SubtitleExportResult:
+    if not context.options.export_srt and context.options.subtitle_embed == "none":
+        return SubtitleExportResult()
 
     with _progress_stage(
         context.progress_callback,
         "export_srt",
-        "Exporting SRT subtitles.",
+        "Preparing subtitles.",
     ):
-        return save_srt(
-            speech_timeline_transcript,
-            context.artifact_paths.srt_path,
-            text_mode=context.options.srt_text_mode,
+        sidecar_srt_path = None
+        embedded_srt_path = None
+
+        if context.options.export_srt:
+            sidecar_srt_path = save_srt(
+                speech_timeline_transcript,
+                context.artifact_paths.srt_path,
+                text_mode=context.options.srt_text_mode,
+            )
+
+        if context.options.subtitle_embed != "none":
+            embedded_srt_path = sidecar_srt_path or save_srt(
+                speech_timeline_transcript,
+                context.artifact_paths.subtitle_embed_srt_path,
+                text_mode=context.options.srt_text_mode,
+            )
+
+        return SubtitleExportResult(
+            sidecar_srt_path=sidecar_srt_path,
+            embedded_srt_path=embedded_srt_path,
         )
 
 
@@ -587,6 +614,7 @@ def _write_manifest(
                 ),
                 export_srt=run_options.export_srt,
                 srt_text_mode=run_options.srt_text_mode,
+                subtitle_embed=run_options.subtitle_embed,
                 ffmpeg_executable=run_options.ffmpeg_executable,
                 resume=run_options.resume,
                 overwrite=run_options.overwrite,
@@ -627,6 +655,11 @@ def _write_manifest(
                     else None
                 ),
                 srt_path=str(inputs.srt_path) if inputs.srt_path is not None else None,
+                embedded_srt_path=(
+                    str(inputs.embedded_srt_path)
+                    if inputs.embedded_srt_path is not None
+                    else None
+                ),
                 manifest_path=str(resolved_manifest_path),
             ),
             metadata={

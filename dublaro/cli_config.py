@@ -60,6 +60,7 @@ class DubCliOverrides:
     export_srt: bool | None = None
     srt_output_path: Path | None = None
     srt_text_mode: str | None = None
+    subtitle_embed: str | None = None
     write_manifest: bool | None = None
     manifest_output_path: Path | None = None
 
@@ -124,6 +125,7 @@ class ResolvedDubSettings:
     export_srt: bool
     srt_output_path: Path | None
     srt_text_mode: str
+    subtitle_embed: str
     write_manifest: bool
     manifest_output_path: Path | None
 
@@ -531,6 +533,7 @@ def resolve_dub_settings(
             base_dir,
         ),
         srt_text_mode=_select(overrides.srt_text_mode, config.srt.text_mode, "adapted"),
+        subtitle_embed=_select(overrides.subtitle_embed, config.srt.embed, "none"),
         write_manifest=_select(overrides.write_manifest, config.manifest.write, True),
         manifest_output_path=_select_path(
             overrides.manifest_output_path,

@@ -7,7 +7,7 @@ from dublaro.adapters.diarization import DiarizationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
-from dublaro.pipeline.subtitles import SrtTextMode
+from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
 
 
@@ -45,6 +45,7 @@ class DubOptions:
     export_srt: bool = False
     srt_output_path: Path | None = None
     srt_text_mode: SrtTextMode = "adapted"
+    subtitle_embed: SubtitleEmbedMode = "none"
     write_manifest: bool = True
     manifest_output_path: Path | None = None
     ffmpeg_executable: str = "ffmpeg"
@@ -76,6 +77,7 @@ class DubArtifactPaths:
     mix_original_audio_path: Path
     mixed_audio_path: Path
     srt_path: Path
+    subtitle_embed_srt_path: Path
     manifest_path: Path
 
 
@@ -133,6 +135,9 @@ class DubPaths:
                 self.workspace_dir / f"{stem}.{options.target_language}.mixed.wav"
             ),
             srt_path=options.srt_output_path or self.output_path.with_suffix(".srt"),
+            subtitle_embed_srt_path=(
+                self.workspace_dir / f"{stem}.{options.target_language}.embed.srt"
+            ),
             manifest_path=(
                 options.manifest_output_path
                 or self.workspace_dir
