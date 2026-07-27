@@ -51,6 +51,8 @@ class DubCliOverrides:
     fit_speech: bool | None = None
     max_speech_speedup: float | None = None
     min_speech_overrun_seconds: float | None = None
+    fit_video: bool | None = None
+    max_video_slowdown: float | None = None
     mix_original_audio: bool | None = None
     original_audio_gain: float | None = None
     ducking_gain: float | None = None
@@ -116,6 +118,8 @@ class ResolvedDubSettings:
     fit_speech: bool
     max_speech_speedup: float
     min_speech_overrun_seconds: float
+    fit_video: bool
+    max_video_slowdown: float
     mix_original_audio: bool
     original_audio_gain: float
     ducking_gain: float
@@ -505,6 +509,12 @@ def resolve_dub_settings(
             overrides.min_speech_overrun_seconds,
             config.fit_speech.min_overrun_seconds,
             0.05,
+        ),
+        fit_video=_select(overrides.fit_video, config.fit_video.enabled, False),
+        max_video_slowdown=_select(
+            overrides.max_video_slowdown,
+            config.fit_video.max_slowdown,
+            1.5,
         ),
         mix_original_audio=_select(
             overrides.mix_original_audio, config.mix.enabled, False

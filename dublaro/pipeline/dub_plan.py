@@ -30,6 +30,8 @@ class DubOptions:
     fit_speech: bool = False
     max_speech_speedup: float = 1.35
     min_speech_overrun_seconds: float = 0.05
+    fit_video: bool = False
+    max_video_slowdown: float = 1.5
     mix_original_audio: bool = False
     original_audio_gain: float = 1.0
     ducking_gain: float = 0.25
@@ -61,6 +63,9 @@ class DubOptions:
         if self.resume and self.overwrite:
             raise ValueError("resume cannot be used with overwrite.")
 
+        if self.max_video_slowdown < 1.0:
+            raise ValueError("max_video_slowdown must be >= 1.0")
+
 
 @dataclass(frozen=True)
 class DubArtifactPaths:
@@ -74,6 +79,9 @@ class DubArtifactPaths:
     speech_track_path: Path
     fitted_transcript_path: Path
     fitted_speech_dir: Path
+    video_fitted_transcript_path: Path
+    fitted_video_path: Path
+    video_fitted_original_audio_path: Path
     mix_original_audio_path: Path
     mixed_audio_path: Path
     srt_path: Path
@@ -104,6 +112,10 @@ class DubPaths:
         source_label = options.source_language or "auto"
         stem = self.video_path.stem
 
+        timing_stem = f"{stem}.{options.target_language}"
+        if options.fit_video:
+            timing_stem = f"{timing_stem}.video-fitted"
+
         return DubArtifactPaths(
             extracted_audio_path=self.workspace_dir / f"{stem}.audio.wav",
             source_transcript_path=self.workspace_dir / f"{stem}.{source_label}.json",
@@ -120,24 +132,29 @@ class DubPaths:
             diarized_transcript_path=self.workspace_dir
             / f"{stem}.{source_label}.diarized.json",
             speech_dir=self.workspace_dir / f"{stem}.{options.target_language}.speech",
-            speech_track_path=(
-                self.workspace_dir
-                / f"{stem}.{options.target_language}.speech-track.wav"
-            ),
+            speech_track_path=self.workspace_dir / f"{timing_stem}.speech-track.wav",
             fitted_transcript_path=(
                 self.workspace_dir / f"{stem}.{options.target_language}.fitted.json"
             ),
             fitted_speech_dir=(
                 self.workspace_dir / f"{stem}.{options.target_language}.fitted-speech"
             ),
+            video_fitted_transcript_path=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.video-fitted.json"
+            ),
+            fitted_video_path=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.video-fitted{self.video_path.suffix}"
+            ),
+            video_fitted_original_audio_path=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.original-video-fitted.wav"
+            ),
             mix_original_audio_path=self.workspace_dir / f"{stem}.original-mix.wav",
-            mixed_audio_path=(
-                self.workspace_dir / f"{stem}.{options.target_language}.mixed.wav"
-            ),
+            mixed_audio_path=self.workspace_dir / f"{timing_stem}.mixed.wav",
             srt_path=options.srt_output_path or self.output_path.with_suffix(".srt"),
-            subtitle_embed_srt_path=(
-                self.workspace_dir / f"{stem}.{options.target_language}.embed.srt"
-            ),
+            subtitle_embed_srt_path=self.workspace_dir / f"{timing_stem}.embed.srt",
             manifest_path=(
                 options.manifest_output_path
                 or self.workspace_dir

@@ -12,6 +12,7 @@ from dublaro.audio.ffmpeg import (
     replace_video_audio_with_hard_subtitles,
     replace_video_audio_with_soft_subtitles,
     run_ffmpeg,
+    slow_video,
 )
 
 
@@ -302,6 +303,44 @@ def test_change_audio_tempo_uses_expected_ffmpeg_arguments(
     assert "22050" in args
     assert "pcm_s16le" in args
     assert output_audio in args
+
+
+def test_slow_video_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_video = tmp_path / "video.mp4"
+    output_video = tmp_path / "video.slow.mp4"
+    input_video.write_bytes(b"fake video")
+
+    calls: list[list[str | Path]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = slow_video(
+        input_video,
+        output_video,
+        slowdown_factor=1.5,
+        overwrite=True,
+        executable="ffmpeg-test",
+    )
+
+    assert result == output_video
+
+    args = calls[0]
+    assert "-filter:v" in args
+    assert "setpts=1.5*PTS" in args
+    assert "-an" in args
+    assert "libx264" in args
+    assert output_video in args
 
 
 def test_change_audio_tempo_rejects_in_place_output(tmp_path: Path) -> None:

@@ -1653,6 +1653,20 @@ def dub(
             help="Only fit clips longer than this tolerance.",
         ),
     ] = None,
+    fit_video_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--fit-video/--no-fit-video",
+            help="Slow the video when generated speech is still too long.",
+        ),
+    ] = None,
+    max_video_slowdown: Annotated[
+        float | None,
+        typer.Option(
+            "--max-video-slowdown",
+            help="Maximum allowed video slowdown factor.",
+        ),
+    ] = None,
     mix_original_audio_enabled: Annotated[
         bool | None,
         typer.Option(
@@ -1802,6 +1816,8 @@ def dub(
                 fit_speech=fit_speech_enabled,
                 max_speech_speedup=max_speech_speedup,
                 min_speech_overrun_seconds=min_speech_overrun_seconds,
+                fit_video=fit_video_enabled,
+                max_video_slowdown=max_video_slowdown,
                 mix_original_audio=mix_original_audio_enabled,
                 original_audio_gain=original_audio_gain,
                 ducking_gain=ducking_gain,
@@ -1907,6 +1923,8 @@ def dub(
             fit_speech=settings.fit_speech,
             max_speech_speedup=settings.max_speech_speedup,
             min_speech_overrun_seconds=settings.min_speech_overrun_seconds,
+            fit_video=settings.fit_video,
+            max_video_slowdown=settings.max_video_slowdown,
             mix_original_audio=settings.mix_original_audio,
             original_audio_gain=settings.original_audio_gain,
             ducking_gain=settings.ducking_gain,

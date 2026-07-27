@@ -722,6 +722,8 @@ def test_dub_command_runs_full_pipeline(
         fit_speech: bool = False,
         max_speech_speedup: float = 1.35,
         min_speech_overrun_seconds: float = 0.05,
+        fit_video: bool = False,
+        max_video_slowdown: float = 1.5,
         mix_original_audio: bool = False,
         original_audio_gain: float = 1.0,
         ducking_gain: float = 0.25,
@@ -758,6 +760,8 @@ def test_dub_command_runs_full_pipeline(
                 "fit_speech": fit_speech,
                 "max_speech_speedup": max_speech_speedup,
                 "min_speech_overrun_seconds": min_speech_overrun_seconds,
+                "fit_video": fit_video,
+                "max_video_slowdown": max_video_slowdown,
                 "mix_original_audio": mix_original_audio,
                 "original_audio_gain": original_audio_gain,
                 "ducking_gain": ducking_gain,
@@ -803,6 +807,9 @@ def test_dub_command_runs_full_pipeline(
             "1.25",
             "--min-speech-overrun",
             "0.1",
+            "--fit-video",
+            "--max-video-slowdown",
+            "1.4",
             "--mix-original-audio",
             "--original-audio-gain",
             "0.8",
@@ -851,6 +858,8 @@ def test_dub_command_runs_full_pipeline(
             "fit_speech": True,
             "max_speech_speedup": 1.25,
             "min_speech_overrun_seconds": 0.1,
+            "fit_video": True,
+            "max_video_slowdown": 1.4,
             "mix_original_audio": True,
             "original_audio_gain": 0.8,
             "ducking_gain": 0.2,
@@ -1037,6 +1046,10 @@ enabled = true
 max_speedup = 1.2
 min_overrun_seconds = 0.2
 
+[dub.fit_video]
+enabled = true
+max_slowdown = 1.4
+
 [dub.mix]
 enabled = true
 original_audio_gain = 0.7
@@ -1097,6 +1110,8 @@ output_path = "runs/manifest.json"
     assert calls[0]["speech_sample_rate"] == 16000
     assert calls[0]["translation_group_segments"] is False
     assert calls[0]["fit_speech"] is True
+    assert calls[0]["fit_video"] is True
+    assert calls[0]["max_video_slowdown"] == 1.4
     assert calls[0]["mix_original_audio"] is True
     assert calls[0]["srt_output_path"] == tmp_path / "subs" / "video.pl.srt"
     assert calls[0]["srt_text_mode"] == "translated"

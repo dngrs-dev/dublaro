@@ -95,6 +95,13 @@ class FitSpeechConfig(BaseModel):
     min_overrun_seconds: float | None = None
 
 
+class FitVideoConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    max_slowdown: float | None = Field(ge=1.0, default=None)
+
+
 class MixConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -143,6 +150,7 @@ class DubConfig(BaseModel):
     text_adapter: TextAdapterConfig = TextAdapterConfig()
     tts: TtsConfig = TtsConfig()
     fit_speech: FitSpeechConfig = FitSpeechConfig()
+    fit_video: FitVideoConfig = FitVideoConfig()
     mix: MixConfig = MixConfig()
     srt: SrtConfig = SrtConfig()
     manifest: ManifestConfig = ManifestConfig()

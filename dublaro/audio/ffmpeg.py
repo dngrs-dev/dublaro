@@ -306,6 +306,68 @@ def replace_video_audio(
     return output_file
 
 
+def slow_video(
+    input_path: str | Path,
+    output_path: str | Path,
+    *,
+    slowdown_factor: float,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    input_file = Path(input_path)
+    output_file = Path(output_path)
+
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input video file does not exist: {input_file}")
+
+    if not input_file.is_file():
+        raise ValueError(f"Input video path is not a file: {input_file}")
+
+    if slowdown_factor < 1.0:
+        raise ValueError("slowdown_factor must be >= 1.0")
+
+    if input_file.resolve() == output_file.resolve():
+        raise ValueError("Cannot slow video in place.")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output file already exists: {output_file}. "
+            "Use overwrite=True to replace it."
+        )
+
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    run_ffmpeg(
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            overwrite_flag,
+            "-i",
+            input_file,
+            "-map",
+            "0:v:0",
+            "-filter:v",
+            f"setpts={slowdown_factor:.6g}*PTS",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            output_file,
+        ],
+        executable=executable,
+    )
+
+    return output_file
+
+
 def change_audio_tempo(
     input_path: str | Path,
     output_path: str | Path,

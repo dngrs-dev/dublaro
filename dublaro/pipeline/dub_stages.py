@@ -7,7 +7,11 @@ from typing import Literal
 
 from dublaro.adapters.asr import TranscriptionOptions
 from dublaro.adapters.diarization import DiarizationOptions
-from dublaro.audio.ffmpeg import extract_audio_from_video
+from dublaro.audio.ffmpeg import (
+    change_audio_tempo,
+    extract_audio_from_video,
+    slow_video,
+)
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.diarize import diarize_transcript
@@ -19,6 +23,7 @@ from dublaro.pipeline.dub_plan import (
 )
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
+from dublaro.pipeline.fit_video import plan_video_slowdown, scale_transcript_timing
 from dublaro.pipeline.manifest import (
     DubbingArtifactsManifest,
     DubbingOptionsManifest,
@@ -45,6 +50,7 @@ DubbingProgressStep = Literal[
     "adapt_text",
     "synthesize",
     "fit_speech",
+    "fit_video",
     "align_speech",
     "mix_original_audio",
     "export_video",
@@ -77,10 +83,20 @@ class SpeechTimingResult:
 
 
 @dataclass(frozen=True)
+class VideoFitResult:
+    transcript: Transcript
+    video_path: Path
+    slowdown_factor: float = 1.0
+    video_fitted_transcript_path: Path | None = None
+    fitted_video_path: Path | None = None
+
+
+@dataclass(frozen=True)
 class ExportAudioResult:
     audio_path: Path
     mix_original_audio_path: Path | None = None
     mixed_audio_path: Path | None = None
+    video_fitted_original_audio_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +119,9 @@ class ManifestInputs:
     dubbed_video_path: Path
     fitted_transcript_path: Path | None
     fitted_speech_dir: Path | None
+    video_fitted_transcript_path: Path | None
+    fitted_video_path: Path | None
+    video_fitted_original_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
@@ -400,6 +419,7 @@ def _fit_speech_to_timing(
             output_dir=fitted_speech_dir,
             max_speedup=context.options.max_speech_speedup,
             min_overrun_seconds=context.options.min_speech_overrun_seconds,
+            allow_unfit_overruns=context.options.fit_video,
             overwrite=context.options.overwrite,
             executable=context.options.ffmpeg_executable,
         )
@@ -409,6 +429,89 @@ def _fit_speech_to_timing(
             transcript=fitted_transcript,
             fitted_transcript_path=fitted_transcript_path,
             fitted_speech_dir=fitted_speech_dir,
+        )
+
+
+def _fit_video_to_speech(
+    context: DubRunContext,
+    transcript: Transcript,
+) -> VideoFitResult:
+    if not context.options.fit_video:
+        return VideoFitResult(
+            transcript=transcript,
+            video_path=context.paths.video_path,
+        )
+
+    plan = plan_video_slowdown(
+        transcript,
+        max_slowdown=context.options.max_video_slowdown,
+        min_overrun_seconds=context.options.min_speech_overrun_seconds,
+    )
+
+    if plan.slowdown_factor <= 1.0:
+        _progress_skipped(
+            context.progress_callback,
+            "fit_video",
+            "Video slowdown not needed.",
+        )
+        return VideoFitResult(
+            transcript=transcript,
+            video_path=context.paths.video_path,
+        )
+
+    fitted_video_path = context.artifact_paths.fitted_video_path
+    video_fitted_transcript_path = context.artifact_paths.video_fitted_transcript_path
+
+    reusable_transcript = (
+        load_reusable_synthesized_transcript(video_fitted_transcript_path)
+        if context.options.resume and reusable_file(fitted_video_path)
+        else None
+    )
+
+    if reusable_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "fit_video",
+            f"Using existing video-fitted artifacts: {fitted_video_path}.",
+        )
+        return VideoFitResult(
+            transcript=reusable_transcript,
+            video_path=fitted_video_path,
+            slowdown_factor=plan.slowdown_factor,
+            video_fitted_transcript_path=video_fitted_transcript_path,
+            fitted_video_path=fitted_video_path,
+        )
+
+    with _progress_stage(
+        context.progress_callback,
+        "fit_video",
+        f"Slowing video by {plan.slowdown_factor:.2f}x.",
+    ):
+        slow_video(
+            context.paths.video_path,
+            fitted_video_path,
+            slowdown_factor=plan.slowdown_factor,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
+        )
+
+        video_fitted_transcript = scale_transcript_timing(
+            transcript,
+            slowdown_factor=plan.slowdown_factor,
+        )
+        video_fitted_transcript.metadata = {
+            **video_fitted_transcript.metadata,
+            "video_fitting_overlong_segments": str(plan.overlong_segment_count),
+            "video_fitting_limiting_segment_id": plan.limiting_segment_id or "",
+        }
+        save_transcript(video_fitted_transcript, video_fitted_transcript_path)
+
+        return VideoFitResult(
+            transcript=video_fitted_transcript,
+            video_path=fitted_video_path,
+            slowdown_factor=plan.slowdown_factor,
+            video_fitted_transcript_path=video_fitted_transcript_path,
+            fitted_video_path=fitted_video_path,
         )
 
 
@@ -442,12 +545,20 @@ def _prepare_audio_for_export(
     context: DubRunContext,
     speech_timeline_transcript: Transcript,
     speech_track_path: Path,
+    *,
+    video_slowdown_factor: float = 1.0,
 ) -> ExportAudioResult:
     if not context.options.mix_original_audio:
         return ExportAudioResult(audio_path=speech_track_path)
 
     original_mix_path = context.artifact_paths.mix_original_audio_path
     mixed_path = context.artifact_paths.mixed_audio_path
+
+    video_fitted_original_audio_path = (
+        context.artifact_paths.video_fitted_original_audio_path
+        if video_slowdown_factor > 1.0
+        else None
+    )
 
     if context.options.resume and reusable_file(mixed_path):
         _progress_skipped(
@@ -459,6 +570,7 @@ def _prepare_audio_for_export(
             audio_path=mixed_path,
             mix_original_audio_path=original_mix_path,
             mixed_audio_path=mixed_path,
+            video_fitted_original_audio_path=video_fitted_original_audio_path,
         )
 
     with _progress_stage(
@@ -466,7 +578,7 @@ def _prepare_audio_for_export(
         "mix_original_audio",
         "Mixing dubbed speech over original audio.",
     ):
-        mix_original_audio_path = original_mix_path
+        original_audio_for_mix_path = original_mix_path
 
         if context.options.resume and reusable_file(original_mix_path):
             _progress_skipped(
@@ -475,7 +587,7 @@ def _prepare_audio_for_export(
                 f"Using existing original mix audio: {original_mix_path}.",
             )
         else:
-            mix_original_audio_path = extract_audio_from_video(
+            original_audio_for_mix_path = extract_audio_from_video(
                 context.paths.video_path,
                 original_mix_path,
                 sample_rate=context.options.speech_sample_rate,
@@ -484,9 +596,30 @@ def _prepare_audio_for_export(
                 executable=context.options.ffmpeg_executable,
             )
 
+        if video_fitted_original_audio_path is not None:
+            if context.options.resume and reusable_file(
+                video_fitted_original_audio_path
+            ):
+                _progress_skipped(
+                    context.progress_callback,
+                    "mix_original_audio",
+                    f"Using existing video-fitted original audio: "
+                    f"{video_fitted_original_audio_path}.",
+                )
+                original_audio_for_mix_path = video_fitted_original_audio_path
+            else:
+                original_audio_for_mix_path = change_audio_tempo(
+                    original_audio_for_mix_path,
+                    video_fitted_original_audio_path,
+                    tempo_factor=1.0 / video_slowdown_factor,
+                    sample_rate=context.options.speech_sample_rate,
+                    overwrite=context.options.overwrite,
+                    executable=context.options.ffmpeg_executable,
+                )
+
         mixed_audio_path = mix_original_audio_with_dubbed_speech(
             speech_timeline_transcript,
-            original_audio_path=mix_original_audio_path,
+            original_audio_path=original_audio_for_mix_path,
             speech_track_path=speech_track_path,
             output_path=mixed_path,
             original_gain=context.options.original_audio_gain,
@@ -498,13 +631,15 @@ def _prepare_audio_for_export(
 
         return ExportAudioResult(
             audio_path=mixed_audio_path,
-            mix_original_audio_path=mix_original_audio_path,
+            mix_original_audio_path=original_mix_path,
             mixed_audio_path=mixed_audio_path,
+            video_fitted_original_audio_path=video_fitted_original_audio_path,
         )
 
 
 def _export_video(
     context: DubRunContext,
+    video_for_export_path: Path,
     audio_for_export_path: Path,
     subtitle_path: Path | None,
 ) -> Path:
@@ -514,7 +649,7 @@ def _export_video(
         "Exporting dubbed video.",
     ):
         return export_dubbed_video(
-            context.paths.video_path,
+            video_for_export_path,
             audio_for_export_path,
             context.paths.output_path,
             subtitle_path=subtitle_path,
@@ -599,6 +734,8 @@ def _write_manifest(
                 fit_speech=run_options.fit_speech,
                 max_speech_speedup=run_options.max_speech_speedup,
                 min_speech_overrun_seconds=run_options.min_speech_overrun_seconds,
+                fit_video=run_options.fit_video,
+                max_video_slowdown=run_options.max_video_slowdown,
                 mix_original_audio=run_options.mix_original_audio,
                 original_audio_gain=run_options.original_audio_gain,
                 ducking_gain=run_options.ducking_gain,
@@ -642,6 +779,21 @@ def _write_manifest(
                 fitted_speech_dir=(
                     str(inputs.fitted_speech_dir)
                     if inputs.fitted_speech_dir is not None
+                    else None
+                ),
+                video_fitted_transcript_path=(
+                    str(inputs.video_fitted_transcript_path)
+                    if inputs.video_fitted_transcript_path is not None
+                    else None
+                ),
+                fitted_video_path=(
+                    str(inputs.fitted_video_path)
+                    if inputs.fitted_video_path is not None
+                    else None
+                ),
+                video_fitted_original_audio_path=(
+                    str(inputs.video_fitted_original_audio_path)
+                    if inputs.video_fitted_original_audio_path is not None
                     else None
                 ),
                 mix_original_audio_path=(

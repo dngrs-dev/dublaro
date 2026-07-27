@@ -11,6 +11,7 @@ def fit_generated_speech_to_segments(
     output_dir: str | Path,
     max_speedup: float = 1.35,
     min_overrun_seconds: float = 0.05,
+    allow_unfit_overruns: bool = False,
     overwrite: bool = False,
     executable: str = "ffmpeg",
 ) -> Transcript:
@@ -25,6 +26,7 @@ def fit_generated_speech_to_segments(
     fitted_dir.mkdir(parents=True, exist_ok=True)
 
     fitted_count = 0
+    unresolved_count = 0
 
     for segment in fitted.sorted_segments():
         if segment.generated_audio_path is None:
@@ -43,13 +45,22 @@ def fit_generated_speech_to_segments(
         if overrun_seconds <= min_overrun_seconds:
             continue
 
-        tempo_factor = audio_duration / target_duration
+        required_tempo_factor = audio_duration / target_duration
 
-        if tempo_factor > max_speedup:
-            raise ValueError(
-                f"Segment {segment.id} needs {tempo_factor:.2f}x speedup, "
-                f"which is above max_speedup={max_speedup:.2f}."
-            )
+        if required_tempo_factor > max_speedup:
+            if not allow_unfit_overruns:
+                raise ValueError(
+                    f"Segment {segment.id} needs {required_tempo_factor:.2f}x speedup, "
+                    f"which is above max_speedup={max_speedup:.2f}."
+                )
+
+            tempo_factor = max_speedup
+            unresolved_count += 1
+        else:
+            tempo_factor = required_tempo_factor
+
+        if tempo_factor <= 1.0:
+            continue
 
         output_path = fitted_dir / _fitted_audio_filename(segment.id)
 
@@ -69,6 +80,7 @@ def fit_generated_speech_to_segments(
         **fitted.metadata,
         "speech_fitting": "ffmpeg-atempo",
         "speech_fitting_fitted_segments": str(fitted_count),
+        "speech_fitting_unresolved_segments": str(unresolved_count),
         "speech_fitting_max_speedup": str(max_speedup),
         "speech_fitting_min_overrun_seconds": str(min_overrun_seconds),
     }

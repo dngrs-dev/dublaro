@@ -21,6 +21,7 @@ from dublaro.pipeline.dub_stages import (
     _export_video,
     _extract_audio,
     _fit_speech_to_timing,
+    _fit_video_to_speech,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
     _synthesize_speech,
@@ -54,6 +55,9 @@ class DubbingArtifacts:
     dubbed_video_path: Path
     fitted_transcript_path: Path | None
     fitted_speech_dir: Path | None
+    video_fitted_transcript_path: Path | None
+    fitted_video_path: Path | None
+    video_fitted_original_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
@@ -82,6 +86,8 @@ def dub_video(
     fit_speech: bool = False,
     max_speech_speedup: float = 1.35,
     min_speech_overrun_seconds: float = 0.05,
+    fit_video: bool = False,
+    max_video_slowdown: float = 1.5,
     mix_original_audio: bool = False,
     original_audio_gain: float = 1.0,
     ducking_gain: float = 0.25,
@@ -118,6 +124,8 @@ def dub_video(
         fit_speech=fit_speech,
         max_speech_speedup=max_speech_speedup,
         min_speech_overrun_seconds=min_speech_overrun_seconds,
+        fit_video=fit_video,
+        max_video_slowdown=max_video_slowdown,
         mix_original_audio=mix_original_audio,
         original_audio_gain=original_audio_gain,
         ducking_gain=ducking_gain,
@@ -195,16 +203,24 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     fitted_transcript_path = speech_timing.fitted_transcript_path
     fitted_speech_dir = speech_timing.fitted_speech_dir
 
+    video_fit = _fit_video_to_speech(context, speech_timing.transcript)
+    speech_timeline_transcript = video_fit.transcript
+    video_for_export_path = video_fit.video_path
+    video_fitted_transcript_path = video_fit.video_fitted_transcript_path
+    fitted_video_path = video_fit.fitted_video_path
+
     speech_track_path = _align_speech_track(context, speech_timeline_transcript)
 
     export_audio = _prepare_audio_for_export(
         context,
         speech_timeline_transcript,
         speech_track_path,
+        video_slowdown_factor=video_fit.slowdown_factor,
     )
     audio_for_export_path = export_audio.audio_path
     mix_original_audio_path = export_audio.mix_original_audio_path
     mixed_audio_path = export_audio.mixed_audio_path
+    video_fitted_original_audio_path = export_audio.video_fitted_original_audio_path
 
     subtitle_export = _prepare_subtitles_for_export(
         context,
@@ -213,6 +229,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     dubbed_video_path = _export_video(
         context,
+        video_for_export_path,
         audio_for_export_path,
         subtitle_export.embedded_srt_path,
     )
@@ -233,6 +250,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         dubbed_video_path=dubbed_video_path,
         fitted_transcript_path=fitted_transcript_path,
         fitted_speech_dir=fitted_speech_dir,
+        video_fitted_transcript_path=video_fitted_transcript_path,
+        fitted_video_path=fitted_video_path,
+        video_fitted_original_audio_path=video_fitted_original_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,
@@ -258,6 +278,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         dubbed_video_path=dubbed_video_path,
         fitted_transcript_path=fitted_transcript_path,
         fitted_speech_dir=fitted_speech_dir,
+        video_fitted_transcript_path=video_fitted_transcript_path,
+        fitted_video_path=fitted_video_path,
+        video_fitted_original_audio_path=video_fitted_original_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,

@@ -158,3 +158,68 @@ def test_fit_generated_speech_to_segments_rejects_excessive_speedup(
             output_dir=tmp_path / "fitted",
             max_speedup=1.35,
         )
+
+
+def test_fit_generated_speech_to_segments_caps_speedup_when_unfit_overruns_allowed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clip_path = tmp_path / "seg-0001.wav"
+    output_dir = tmp_path / "fitted"
+
+    write_mono_pcm16_wav(clip_path, samples=array("h", [0] * 20), sample_rate=10)
+
+    calls: list[TempoCall] = []
+
+    def fake_change_audio_tempo(
+        input_path: str | Path,
+        output_path: str | Path,
+        *,
+        tempo_factor: float,
+        sample_rate: int | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        calls.append(
+            TempoCall(
+                input_path=Path(input_path),
+                output_path=output_file,
+                tempo_factor=tempo_factor,
+                sample_rate=sample_rate,
+                overwrite=overwrite,
+                executable=executable,
+            )
+        )
+        write_mono_pcm16_wav(output_file, samples=array("h", [0] * 16), sample_rate=10)
+        return output_file
+
+    monkeypatch.setattr(
+        fit_speech_module,
+        "change_audio_tempo",
+        fake_change_audio_tempo,
+    )
+
+    transcript = Transcript(
+        id="lesson-1",
+        source_language="en",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=1.0,
+                generated_audio_path=str(clip_path),
+            )
+        ],
+    )
+
+    fitted = fit_speech_module.fit_generated_speech_to_segments(
+        transcript,
+        output_dir=output_dir,
+        max_speedup=1.25,
+        allow_unfit_overruns=True,
+    )
+
+    assert calls[0].tempo_factor == pytest.approx(1.25)
+    assert fitted.metadata["speech_fitting_fitted_segments"] == "1"
+    assert fitted.metadata["speech_fitting_unresolved_segments"] == "1"

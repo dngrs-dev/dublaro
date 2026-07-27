@@ -185,6 +185,7 @@ def test_dub_video_can_fit_speech_before_alignment(
         output_dir: str | Path,
         max_speedup: float = 1.35,
         min_overrun_seconds: float = 0.05,
+        allow_unfit_overruns: bool = False,
         overwrite: bool = False,
         executable: str = "ffmpeg",
     ) -> Transcript:
@@ -206,6 +207,7 @@ def test_dub_video_can_fit_speech_before_alignment(
                 "output_dir": fitted_dir,
                 "max_speedup": max_speedup,
                 "min_overrun_seconds": min_overrun_seconds,
+                "allow_unfit_overruns": allow_unfit_overruns,
                 "overwrite": overwrite,
                 "executable": executable,
             }
@@ -280,10 +282,178 @@ def test_dub_video_can_fit_speech_before_alignment(
             "output_dir": workspace_dir / "lesson.pl.fitted-speech",
             "max_speedup": 1.25,
             "min_overrun_seconds": 0.1,
+            "allow_unfit_overruns": False,
             "overwrite": True,
             "executable": "ffmpeg-test",
         },
         {"step": "export", "executable": "ffmpeg-test"},
+    ]
+
+
+def test_dub_video_can_fit_video_after_capped_speech_fitting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    def fake_fit_generated_speech_to_segments(
+        transcript: Transcript,
+        *,
+        output_dir: str | Path,
+        max_speedup: float = 1.35,
+        min_overrun_seconds: float = 0.05,
+        allow_unfit_overruns: bool = False,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Transcript:
+        fitted = transcript.model_copy(deep=True)
+        fitted_audio_path = Path(output_dir) / "seg-0001.fit.wav"
+        write_mono_pcm16_wav(
+            fitted_audio_path,
+            samples=array("h", [0] * 12_000),
+            sample_rate=8_000,
+        )
+        fitted.segments[0].generated_audio_path = str(fitted_audio_path)
+
+        calls.append(
+            {
+                "step": "fit_speech",
+                "allow_unfit_overruns": allow_unfit_overruns,
+                "max_speedup": max_speedup,
+            }
+        )
+
+        return fitted
+
+    def fake_slow_video(
+        input_path: str | Path,
+        output_path: str | Path,
+        *,
+        slowdown_factor: float,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake slowed video")
+        calls.append(
+            {
+                "step": "fit_video",
+                "input_path": Path(input_path),
+                "output_path": output_file,
+                "slowdown_factor": slowdown_factor,
+                "overwrite": overwrite,
+                "executable": executable,
+            }
+        )
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        calls.append(
+            {
+                "step": "export",
+                "video_path": Path(video_path),
+                "speech_track_path": Path(speech_track_path),
+            }
+        )
+        return output_file
+
+    monkeypatch.setattr(
+        dub_stages,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(
+        dub_stages,
+        "fit_generated_speech_to_segments",
+        fake_fit_generated_speech_to_segments,
+    )
+    monkeypatch.setattr(dub_stages, "slow_video", fake_slow_video)
+    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        speech_sample_rate=8_000,
+        fit_speech=True,
+        max_speech_speedup=1.25,
+        fit_video=True,
+        max_video_slowdown=1.6,
+        ffmpeg_executable="ffmpeg-test",
+        overwrite=True,
+    )
+
+    assert artifacts.video_fitted_transcript_path == (
+        workspace_dir / "lesson.pl.video-fitted.json"
+    )
+    assert artifacts.fitted_video_path == (workspace_dir / "lesson.pl.video-fitted.mp4")
+    assert artifacts.speech_track_path == (
+        workspace_dir / "lesson.pl.video-fitted.speech-track.wav"
+    )
+
+    assert artifacts.video_fitted_transcript_path is not None
+    video_fitted = load_transcript(artifacts.video_fitted_transcript_path)
+    assert video_fitted.segments[0].end == pytest.approx(1.5)
+
+    assert calls == [
+        {
+            "step": "fit_speech",
+            "allow_unfit_overruns": True,
+            "max_speedup": 1.25,
+        },
+        {
+            "step": "fit_video",
+            "input_path": video_path,
+            "output_path": workspace_dir / "lesson.pl.video-fitted.mp4",
+            "slowdown_factor": pytest.approx(1.5),
+            "overwrite": True,
+            "executable": "ffmpeg-test",
+        },
+        {
+            "step": "export",
+            "video_path": workspace_dir / "lesson.pl.video-fitted.mp4",
+            "speech_track_path": workspace_dir
+            / "lesson.pl.video-fitted.speech-track.wav",
+        },
     ]
 
 

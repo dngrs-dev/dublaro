@@ -68,6 +68,8 @@ class DubbingOptionsManifest(BaseModel):
     fit_speech: bool
     max_speech_speedup: float
     min_speech_overrun_seconds: float
+    fit_video: bool
+    max_video_slowdown: float
     mix_original_audio: bool
     original_audio_gain: float
     ducking_gain: float
@@ -97,6 +99,9 @@ class DubbingArtifactsManifest(BaseModel):
     dubbed_video_path: str
     fitted_transcript_path: str | None = None
     fitted_speech_dir: str | None = None
+    video_fitted_transcript_path: str | None = None
+    fitted_video_path: str | None = None
+    video_fitted_original_audio_path: str | None = None
     mix_original_audio_path: str | None = None
     mixed_audio_path: str | None = None
     srt_path: str | None = None
