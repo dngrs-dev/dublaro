@@ -88,7 +88,11 @@ from dublaro.pipeline.synthesize import (
     default_synthesized_transcript_path,
     synthesize_transcript_speech,
 )
-from dublaro.pipeline.timing import analyze_speech_timing
+from dublaro.pipeline.timing import (
+    TimingPreview,
+    analyze_speech_timing,
+    preview_speech_timing,
+)
 from dublaro.pipeline.transcribe import (
     default_transcript_path,
     load_transcript,
@@ -656,6 +660,22 @@ def translate(
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
 
 
+def format_optional_seconds(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.2f}s"
+
+
+def format_optional_factor(value: float | None) -> str:
+    if value is None:
+        return ""
+    return f"{value:.2f}x"
+
+
+def timing_preview_needs_attention(preview: TimingPreview) -> bool:
+    return preview.status != "ok"
+
+
 @app.command("preview-units")
 def preview_units(
     transcript_path: Annotated[
@@ -797,6 +817,97 @@ def preview_speakers(
             "[yellow]Warning:[/yellow] Configured voice profiles not present in "
             f"transcript: {', '.join(unused_voice_profiles)}."
         )
+
+
+@app.command("preview-timing")
+def preview_timing(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input synthesized transcript JSON file.",
+        ),
+    ],
+    max_speedup: Annotated[
+        float,
+        typer.Option(
+            "--max-speedup",
+            help="Maximum speech speed-up before video fitting is needed.",
+        ),
+    ] = 1.35,
+    min_overrun_seconds: Annotated[
+        float,
+        typer.Option(
+            "--min-overrun",
+            help="Ignore audio overruns at or below this duration.",
+        ),
+    ] = 0.05,
+    only_issues: Annotated[
+        bool,
+        typer.Option(
+            "--only-issues/--all",
+            help="Show only segments that need attention.",
+        ),
+    ] = False,
+) -> None:
+    """Preview segment timing before speech or video fitting."""
+    try:
+        transcript = load_transcript(transcript_path)
+        previews = preview_speech_timing(
+            transcript,
+            max_speedup=max_speedup,
+            min_overrun_seconds=min_overrun_seconds,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    attention_count = sum(
+        timing_preview_needs_attention(preview) for preview in previews
+    )
+    video_fit_count = sum(preview.needs_video_fit for preview in previews)
+
+    console.print(
+        "[green]Timing preview:[/green] "
+        f"{len(previews)} segments, "
+        f"{attention_count} need attention, "
+        f"{video_fit_count} need video fitting"
+    )
+
+    shown_previews = (
+        [preview for preview in previews if timing_preview_needs_attention(preview)]
+        if only_issues
+        else previews
+    )
+
+    if not shown_previews:
+        console.print("[green]No timing issues to show.[/green]")
+        return
+
+    table = Table(title="Timing Preview")
+    table.add_column("Segment", no_wrap=True)
+    table.add_column("Target", justify="right", no_wrap=True)
+    table.add_column("Audio", justify="right", no_wrap=True)
+    table.add_column("Overrun", justify="right", no_wrap=True)
+    table.add_column("Req", justify="right", no_wrap=True)
+    table.add_column("Video", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+
+    for preview in shown_previews:
+        table.add_row(
+            preview.segment_id,
+            format_optional_seconds(preview.target_duration),
+            format_optional_seconds(preview.audio_duration),
+            format_optional_seconds(preview.overrun_seconds),
+            format_optional_factor(preview.required_speedup),
+            "yes" if preview.needs_video_fit else "no",
+            preview.status,
+        )
+
+    console.print(table)
 
 
 @app.command("adapt-text")
