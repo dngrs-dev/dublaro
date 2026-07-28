@@ -433,6 +433,9 @@ def test_dub_video_can_fit_video_after_capped_speech_fitting(
     assert artifacts.video_fitted_transcript_path is not None
     video_fitted = load_transcript(artifacts.video_fitted_transcript_path)
     assert video_fitted.segments[0].end == pytest.approx(1.5)
+    metadata = video_fitted.segments[0].metadata
+    assert metadata["timing_required_video_slowdown"] == "1.5"
+    assert metadata["timing_applied_video_slowdown"] == "1.5"
 
     assert calls == [
         {

@@ -498,6 +498,7 @@ def _fit_video_to_speech(
         video_fitted_transcript = scale_transcript_timing(
             transcript,
             slowdown_factor=plan.slowdown_factor,
+            min_overrun_seconds=context.options.min_speech_overrun_seconds,
         )
         video_fitted_transcript.metadata = {
             **video_fitted_transcript.metadata,

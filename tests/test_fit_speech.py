@@ -90,6 +90,12 @@ def test_fit_generated_speech_to_segments_fits_overlong_clip(
         output_dir / "seg-0001.fit.wav"
     )
     assert fitted.metadata["speech_fitting_fitted_segments"] == "1"
+
+    segment_metadata = fitted.segments[0].metadata
+    assert segment_metadata["timing_required_speedup"] == "1.2"
+    assert segment_metadata["timing_applied_speedup"] == "1.2"
+    assert segment_metadata["timing_required_video_slowdown"] == "1"
+    assert segment_metadata["timing_fit_status"] == "speech_fitted"
     assert transcript.segments[0].generated_audio_path == str(clip_path)
 
 
@@ -223,3 +229,10 @@ def test_fit_generated_speech_to_segments_caps_speedup_when_unfit_overruns_allow
     assert calls[0].tempo_factor == pytest.approx(1.25)
     assert fitted.metadata["speech_fitting_fitted_segments"] == "1"
     assert fitted.metadata["speech_fitting_unresolved_segments"] == "1"
+
+    segment_metadata = fitted.segments[0].metadata
+    assert segment_metadata["timing_required_speedup"] == "2"
+    assert segment_metadata["timing_applied_speedup"] == "1.25"
+    assert segment_metadata["timing_fitted_audio_duration_seconds"] == "1.6"
+    assert segment_metadata["timing_required_video_slowdown"] == "1.6"
+    assert segment_metadata["timing_fit_status"] == "speech_capped_for_video"

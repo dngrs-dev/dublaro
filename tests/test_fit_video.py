@@ -64,3 +64,25 @@ def test_scale_transcript_timing_scales_segments_and_duration():
     assert scaled.segments[0].start == pytest.approx(0.75)
     assert scaled.segments[0].end == pytest.approx(2.25)
     assert transcript.segments[0].start == pytest.approx(0.5)
+
+
+def test_scale_transcript_timing_writes_video_diagnostics(tmp_path):
+    clip = tmp_path / "seg-0001.wav"
+    write_mono_pcm16_wav(clip, samples=array("h", [0] * 15), sample_rate=10)
+
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        duration=1.0,
+        segments=[
+            Segment(id="seg-0001", start=0.0, end=1.0, generated_audio_path=str(clip)),
+        ],
+    )
+
+    scaled = scale_transcript_timing(transcript, slowdown_factor=1.5)
+
+    metadata = scaled.segments[0].metadata
+    assert metadata["timing_required_video_slowdown"] == "1.5"
+    assert metadata["timing_applied_video_slowdown"] == "1.5"
+    assert metadata["timing_video_fitted_duration_seconds"] == "1.5"
+    assert metadata["timing_video_fit_status"] == "video_slowed"

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from dublaro.audio.ffmpeg import change_audio_tempo
 from dublaro.audio.wav import read_mono_pcm16_wav
+from dublaro.pipeline.timing_diagnostics import update_speech_timing_diagnostics
 from dublaro.schemas import Transcript
 
 
@@ -39,13 +40,22 @@ def fit_generated_speech_to_segments(
         if target_duration <= 0:
             continue
 
-        audio_duration = len(samples) / sample_rate
-        overrun_seconds = audio_duration - target_duration
+        original_audio_duration = len(samples) / sample_rate
+        overrun_seconds = original_audio_duration - target_duration
+        required_tempo_factor = original_audio_duration / target_duration
 
         if overrun_seconds <= min_overrun_seconds:
+            update_speech_timing_diagnostics(
+                segment,
+                target_duration=target_duration,
+                original_audio_duration=original_audio_duration,
+                fitted_audio_duration=original_audio_duration,
+                applied_speedup=1.0,
+                max_speedup=max_speedup,
+                min_overrun_seconds=min_overrun_seconds,
+                status="within_tolerance",
+            )
             continue
-
-        required_tempo_factor = audio_duration / target_duration
 
         if required_tempo_factor > max_speedup:
             if not allow_unfit_overruns:
@@ -56,11 +66,10 @@ def fit_generated_speech_to_segments(
 
             tempo_factor = max_speedup
             unresolved_count += 1
+            status = "speech_capped_for_video"
         else:
             tempo_factor = required_tempo_factor
-
-        if tempo_factor <= 1.0:
-            continue
+            status = "speech_fitted"
 
         output_path = fitted_dir / _fitted_audio_filename(segment.id)
 
@@ -73,7 +82,20 @@ def fit_generated_speech_to_segments(
             executable=executable,
         )
 
+        fitted_sample_rate, fitted_samples = read_mono_pcm16_wav(fitted_audio_path)
+        fitted_audio_duration = len(fitted_samples) / fitted_sample_rate
+
         segment.generated_audio_path = str(fitted_audio_path)
+        update_speech_timing_diagnostics(
+            segment,
+            target_duration=target_duration,
+            original_audio_duration=original_audio_duration,
+            fitted_audio_duration=fitted_audio_duration,
+            applied_speedup=tempo_factor,
+            max_speedup=max_speedup,
+            min_overrun_seconds=min_overrun_seconds,
+            status=status,
+        )
         fitted_count += 1
 
     fitted.metadata = {
