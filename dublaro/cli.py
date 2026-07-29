@@ -104,6 +104,7 @@ from dublaro.pipeline.translate import (
     translate_transcript,
 )
 from dublaro.pipeline.units import group_segments_for_translation
+from dublaro.pipeline.voice_preview import synthesize_voice_samples
 from dublaro.pipeline.voices import SpeakerVoice
 from dublaro.schemas import VoiceProfile
 
@@ -817,6 +818,112 @@ def preview_speakers(
             "[yellow]Warning:[/yellow] Configured voice profiles not present in "
             f"transcript: {', '.join(unused_voice_profiles)}."
         )
+
+
+@app.command("preview-voices")
+def preview_voices(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to dublaro TOML config.",
+        ),
+    ] = None,
+    text: Annotated[
+        str,
+        typer.Option(
+            "--text",
+            help="Text to synthesize for each configured speaker voice.",
+        ),
+    ] = "Hello",
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Directory where generated voice samples will be saved.",
+        ),
+    ] = None,
+    language: Annotated[
+        str | None,
+        typer.Option(
+            "--language",
+            help="Preview language. Defaults to dub.target_language from config.",
+        ),
+    ] = None,
+    sample_rate: Annotated[
+        int | None,
+        typer.Option(
+            "--sample-rate",
+            help="Preview sample rate. Defaults to dub speech sample rate.",
+        ),
+    ] = None,
+) -> None:
+    """Generate short TTS samples for configured speaker voices."""
+    try:
+        loaded_config = load_config(config_path)
+
+        if language is None and loaded_config.config.dub.target_language is None:
+            raise ValueError(
+                "--language is required when dub.target_language is not set in config."
+            )
+
+        settings = resolve_dub_settings(
+            video_path=Path("voice-preview.mp4"),
+            loaded_config=loaded_config,
+            overrides=DubCliOverrides(
+                target_language=language,
+                speech_sample_rate=sample_rate,
+            ),
+        )
+
+        speaker_voices = create_speaker_voices(settings.voice_profiles)
+
+        fallback_adapter: TtsAdapter | None = None
+        if not speaker_voices:
+            fallback_adapter = create_tts_adapter(
+                settings.tts_backend,
+                piper_model_path=settings.piper_model_path,
+                piper_config_path=settings.piper_config_path,
+                piper_executable=settings.piper_executable,
+                piper_speaker=settings.piper_speaker,
+            )
+
+        sample_output_dir = output_dir or settings.workspace_dir / "voice-samples"
+
+        samples = synthesize_voice_samples(
+            text=text,
+            output_dir=sample_output_dir,
+            language=settings.target_language,
+            sample_rate=settings.speech_sample_rate,
+            speaker_voices=speaker_voices,
+            fallback_adapter=fallback_adapter,
+            fallback_tts_backend=settings.tts_backend,
+        )
+    except (DublaroConfigError, FileNotFoundError, RuntimeError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(
+        f"[green]Voice samples:[/green] {len(samples)} saved to {sample_output_dir}"
+    )
+
+    table = Table(title="Voice Sample Preview")
+    table.add_column("Speaker", no_wrap=True)
+    table.add_column("Name")
+    table.add_column("Backend")
+    table.add_column("Output")
+
+    for sample in samples:
+        table.add_row(
+            sample.speaker_id,
+            sample.display_name or "",
+            sample.tts_backend,
+            str(sample.output_path),
+        )
+
+    console.print(table)
 
 
 @app.command("preview-timing")

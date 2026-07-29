@@ -370,6 +370,58 @@ tts_backend = "fake"
     assert "SPEAKER_99" in result.output
 
 
+def test_preview_voices_command_generates_configured_voice_samples(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "dublaro.toml"
+    output_dir = tmp_path / "samples"
+
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+speech_sample_rate = 16000
+
+[dub.tts]
+backend = "fake"
+
+[voices."SPEAKER_00"]
+display_name = "Host"
+tts_backend = "fake"
+
+[voices."SPEAKER_01"]
+display_name = "Guest"
+tts_backend = "fake"
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "preview-voices",
+            "--config",
+            str(config_path),
+            "--text",
+            "Hello",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Voice samples" in result.output
+    assert "SPEAKER_00" in result.output
+    assert "SPEAKER_01" in result.output
+    assert (output_dir / "SPEAKER_00.wav").exists()
+    assert (output_dir / "SPEAKER_01.wav").exists()
+
+    sample_rate, audio = read_mono_pcm16_wav(output_dir / "SPEAKER_00.wav")
+
+    assert sample_rate == 16000
+    assert len(audio) > 0
+
+
 def test_preview_timing_command_shows_speedup_and_video_fit(tmp_path: Path) -> None:
     speedup_clip = tmp_path / "speedup.wav"
     video_clip = tmp_path / "video.wav"
