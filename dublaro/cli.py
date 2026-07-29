@@ -31,6 +31,7 @@ from dublaro.audio.ffmpeg import (
 )
 from dublaro.cli_config import (
     DubCliOverrides,
+    ResolvedDubSettings,
     ResolvedVoiceProfileSettings,
     resolve_dub_settings,
 )
@@ -48,7 +49,15 @@ from dublaro.pipeline.align import (
     build_speech_timeline,
     default_speech_timeline_path,
 )
+from dublaro.pipeline.batch import (
+    default_batch_output_dir,
+    default_batch_workspace_dir,
+    discover_batch_videos,
+    format_video_extensions,
+)
 from dublaro.pipeline.dub import (
+    DubbingArtifacts,
+    DubbingProgressCallback,
     DubbingProgressStatus,
     DubbingProgressStep,
     dub_video,
@@ -284,6 +293,14 @@ class SpeakerVoicePreview:
     piper_speaker: int | None
 
 
+@dataclass(frozen=True)
+class BatchDubResult:
+    video_path: Path
+    output_path: Path | None
+    status: str
+    message: str
+
+
 def preview_speaker_voice(
     speaker_id: str,
     loaded_config: LoadedConfig,
@@ -415,6 +432,224 @@ def print_dub_progress(
     if status == "skipped":
         console.print(f"[yellow]Skipping:[/yellow] {message}")
         return
+
+
+def validate_resolved_dub_settings(
+    settings: ResolvedDubSettings,
+) -> tuple[SrtTextMode, SubtitleEmbedMode]:
+    parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
+    parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
+
+    if settings.manifest_output_path is not None and not settings.write_manifest:
+        raise ValueError(
+            "--manifest-output cannot be used when manifest writing is disabled."
+        )
+
+    if settings.resume and settings.overwrite:
+        raise ValueError("--resume cannot be used with --overwrite.")
+
+    return parsed_srt_text_mode, parsed_subtitle_embed
+
+
+def run_dub_preflight(
+    video_path: Path,
+    settings: ResolvedDubSettings,
+) -> DubPreflightReport:
+    return validate_dub_preflight(
+        video_path=video_path,
+        output_path=settings.output_path,
+        workspace_dir=settings.workspace_dir,
+        overwrite=settings.overwrite,
+        ffmpeg_executable=settings.ffmpeg_executable,
+        asr_backend=settings.asr_backend,
+        translation_backend=settings.translation_backend,
+        source_language=settings.source_language,
+        target_language=settings.target_language,
+        install_translation_package=settings.install_package,
+        tts_backend=settings.tts_backend,
+        piper_model_path=settings.piper_model_path,
+        piper_config_path=settings.piper_config_path,
+        piper_executable=settings.piper_executable,
+        speaker_voices=create_speaker_voice_preflight_settings(settings.voice_profiles),
+        export_srt=settings.export_srt,
+        srt_output_path=settings.srt_output_path,
+        write_manifest=settings.write_manifest,
+        manifest_output_path=settings.manifest_output_path,
+        resume=settings.resume,
+    )
+
+
+def run_resolved_dub(
+    video_path: Path,
+    settings: ResolvedDubSettings,
+    *,
+    parsed_srt_text_mode: SrtTextMode,
+    parsed_subtitle_embed: SubtitleEmbedMode,
+    progress_callback: DubbingProgressCallback | None,
+) -> DubbingArtifacts:
+    return dub_video(
+        video_path,
+        settings.output_path,
+        source_language=settings.source_language,
+        target_language=settings.target_language,
+        workspace_dir=settings.workspace_dir,
+        asr_adapter=create_asr_adapter(
+            settings.asr_backend,
+            model_size=settings.model_size,
+            device=settings.device,
+            compute_type=settings.compute_type,
+        ),
+        diarization_adapter=(
+            create_diarization_adapter(
+                settings.diarization_backend,
+                model_id=settings.diarization_model_id,
+                device=settings.diarization_device,
+                token_env_var=settings.diarization_token_env_var,
+            )
+            if settings.diarize
+            else None
+        ),
+        translation_adapter=create_translation_adapter(
+            settings.translation_backend,
+            auto_install=settings.install_package,
+        ),
+        text_adapter=create_text_adapter(settings.text_adapter_backend),
+        tts_adapter=create_tts_adapter(
+            settings.tts_backend,
+            piper_model_path=settings.piper_model_path,
+            piper_config_path=settings.piper_config_path,
+            piper_executable=settings.piper_executable,
+            piper_speaker=settings.piper_speaker,
+        ),
+        speaker_voices=create_speaker_voices(settings.voice_profiles),
+        diarize=settings.diarize,
+        diarization_min_speakers=settings.diarization_min_speakers,
+        diarization_max_speakers=settings.diarization_max_speakers,
+        translation_group_segments=settings.translation_group_segments,
+        max_translation_group_pause_seconds=settings.max_translation_group_pause_seconds,
+        max_translation_group_duration_seconds=settings.max_translation_group_duration_seconds,
+        asr_sample_rate=settings.asr_sample_rate,
+        speech_sample_rate=settings.speech_sample_rate,
+        fit_speech=settings.fit_speech,
+        max_speech_speedup=settings.max_speech_speedup,
+        min_speech_overrun_seconds=settings.min_speech_overrun_seconds,
+        fit_video=settings.fit_video,
+        max_video_slowdown=settings.max_video_slowdown,
+        mix_original_audio=settings.mix_original_audio,
+        original_audio_gain=settings.original_audio_gain,
+        ducking_gain=settings.ducking_gain,
+        speech_gain=settings.speech_gain,
+        ducking_margin_seconds=settings.ducking_margin_seconds,
+        ducking_fade_seconds=settings.ducking_fade_seconds,
+        export_srt=settings.export_srt,
+        srt_output_path=settings.srt_output_path,
+        srt_text_mode=parsed_srt_text_mode,
+        subtitle_embed=parsed_subtitle_embed,
+        progress_callback=progress_callback,
+        write_manifest=settings.write_manifest,
+        manifest_output_path=settings.manifest_output_path,
+        ffmpeg_executable=settings.ffmpeg_executable,
+        resume=settings.resume,
+        overwrite=settings.overwrite,
+    )
+
+
+def print_dub_artifacts(artifacts: DubbingArtifacts) -> None:
+    console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
+    console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
+
+    if artifacts.fitted_transcript_path is not None:
+        console.print(
+            f"[green]Fitted transcript:[/green] {artifacts.fitted_transcript_path}"
+        )
+
+    if artifacts.mixed_audio_path is not None:
+        console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
+
+    if artifacts.srt_path is not None:
+        console.print(f"[green]SRT subtitles:[/green] {artifacts.srt_path}")
+
+    if artifacts.manifest_path is not None:
+        console.print(f"[green]Manifest:[/green] {artifacts.manifest_path}")
+
+
+def print_adapter_notes(settings: ResolvedDubSettings) -> None:
+    if settings.asr_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
+    if settings.diarize and settings.diarization_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake diarization adapter.")
+    if settings.translation_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake translation adapter.")
+    if settings.text_adapter_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake text adapter.")
+    if settings.tts_backend == "fake":
+        console.print("[yellow]Note:[/yellow] using fake TTS adapter.")
+
+
+def validate_batch_config(
+    loaded_config: LoadedConfig,
+    *,
+    output_dir: Path | None,
+    workspace_root: Path | None,
+) -> None:
+    config = loaded_config.config.dub
+
+    if output_dir is None and config.output_path is not None:
+        raise ValueError(
+            "Batch cannot use dub.output_path because it is one exact file. "
+            "Use --output-dir or dub.output_dir instead."
+        )
+
+    if workspace_root is None and config.workspace_dir is not None:
+        raise ValueError(
+            "Batch cannot use dub.workspace_dir because it is one exact directory. "
+            "Use --workspace-root instead."
+        )
+
+    if config.srt.output_path is not None and config.srt.export is not False:
+        raise ValueError(
+            "Batch cannot use dub.srt.output_path because it is one exact file. "
+            "Remove it and let Dublaro create per-video SRT paths."
+        )
+
+    if config.manifest.output_path is not None and config.manifest.write is not False:
+        raise ValueError(
+            "Batch cannot use dub.manifest.output_path because it is one exact file. "
+            "Remove it and let Dublaro create per-video manifest paths."
+        )
+
+
+def print_batch_summary(results: list[BatchDubResult]) -> None:
+    completed_count = sum(result.status == "done" for result in results)
+    planned_count = sum(result.status == "planned" for result in results)
+    failed_count = sum(result.status == "failed" for result in results)
+
+    console.print(
+        "[bold]Batch summary:[/bold] "
+        f"{completed_count} done, {planned_count} planned, {failed_count} failed"
+    )
+
+    table = Table(title="Batch")
+    table.add_column("Status")
+    table.add_column("Input", overflow="fold", ratio=2)
+    table.add_column("Output", overflow="fold", ratio=2)
+    table.add_column("Message", overflow="fold", ratio=2)
+
+    for result in results:
+        style = {
+            "done": "green",
+            "planned": "yellow",
+            "failed": "red",
+        }.get(result.status, "white")
+
+        table.add_row(
+            f"[{style}]{result.status}[/{style}]",
+            str(result.video_path),
+            str(result.output_path or ""),
+            result.message,
+        )
+
+    console.print(table)
 
 
 @app.command("extract-audio")
@@ -2050,115 +2285,27 @@ def dub(
                 manifest_output_path=manifest_output_path,
             ),
         )
-        parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
-        parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
-
-        if settings.manifest_output_path is not None and not settings.write_manifest:
-            raise ValueError(
-                "--manifest-output cannot be used when manifest writing is disabled."
-            )
-
-        if settings.resume and settings.overwrite:
-            raise ValueError("--resume cannot be used with --overwrite.")
+        parsed_srt_text_mode, parsed_subtitle_embed = validate_resolved_dub_settings(
+            settings
+        )
     except (DublaroConfigError, ValueError, typer.BadParameter) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
     if settings.preflight:
-        report = validate_dub_preflight(
-            video_path=video_path,
-            output_path=settings.output_path,
-            workspace_dir=settings.workspace_dir,
-            overwrite=settings.overwrite,
-            ffmpeg_executable=settings.ffmpeg_executable,
-            asr_backend=settings.asr_backend,
-            translation_backend=settings.translation_backend,
-            source_language=settings.source_language,
-            target_language=settings.target_language,
-            install_translation_package=settings.install_package,
-            tts_backend=settings.tts_backend,
-            piper_model_path=settings.piper_model_path,
-            piper_config_path=settings.piper_config_path,
-            piper_executable=settings.piper_executable,
-            speaker_voices=create_speaker_voice_preflight_settings(
-                settings.voice_profiles
-            ),
-            export_srt=settings.export_srt,
-            srt_output_path=settings.srt_output_path,
-            write_manifest=settings.write_manifest,
-            manifest_output_path=settings.manifest_output_path,
-            resume=settings.resume,
-        )
+        report = run_dub_preflight(video_path, settings)
         print_preflight_report(report)
 
         if report.has_errors:
             raise typer.Exit(code=1)
 
     try:
-        artifacts = dub_video(
+        artifacts = run_resolved_dub(
             video_path,
-            settings.output_path,
-            source_language=settings.source_language,
-            target_language=settings.target_language,
-            workspace_dir=settings.workspace_dir,
-            asr_adapter=create_asr_adapter(
-                settings.asr_backend,
-                model_size=settings.model_size,
-                device=settings.device,
-                compute_type=settings.compute_type,
-            ),
-            diarization_adapter=(
-                create_diarization_adapter(
-                    settings.diarization_backend,
-                    model_id=settings.diarization_model_id,
-                    device=settings.diarization_device,
-                    token_env_var=settings.diarization_token_env_var,
-                )
-                if settings.diarize
-                else None
-            ),
-            translation_adapter=create_translation_adapter(
-                settings.translation_backend,
-                auto_install=settings.install_package,
-            ),
-            text_adapter=create_text_adapter(settings.text_adapter_backend),
-            tts_adapter=create_tts_adapter(
-                settings.tts_backend,
-                piper_model_path=settings.piper_model_path,
-                piper_config_path=settings.piper_config_path,
-                piper_executable=settings.piper_executable,
-                piper_speaker=settings.piper_speaker,
-            ),
-            speaker_voices=create_speaker_voices(settings.voice_profiles),
-            diarize=settings.diarize,
-            diarization_min_speakers=settings.diarization_min_speakers,
-            diarization_max_speakers=settings.diarization_max_speakers,
-            translation_group_segments=settings.translation_group_segments,
-            max_translation_group_pause_seconds=settings.max_translation_group_pause_seconds,
-            max_translation_group_duration_seconds=settings.max_translation_group_duration_seconds,
-            asr_sample_rate=settings.asr_sample_rate,
-            speech_sample_rate=settings.speech_sample_rate,
-            fit_speech=settings.fit_speech,
-            max_speech_speedup=settings.max_speech_speedup,
-            min_speech_overrun_seconds=settings.min_speech_overrun_seconds,
-            fit_video=settings.fit_video,
-            max_video_slowdown=settings.max_video_slowdown,
-            mix_original_audio=settings.mix_original_audio,
-            original_audio_gain=settings.original_audio_gain,
-            ducking_gain=settings.ducking_gain,
-            speech_gain=settings.speech_gain,
-            ducking_margin_seconds=settings.ducking_margin_seconds,
-            ducking_fade_seconds=settings.ducking_fade_seconds,
-            export_srt=settings.export_srt,
-            srt_output_path=settings.srt_output_path,
-            srt_text_mode=parsed_srt_text_mode,
-            subtitle_embed=parsed_subtitle_embed,
+            settings,
+            parsed_srt_text_mode=parsed_srt_text_mode,
+            parsed_subtitle_embed=parsed_subtitle_embed,
             progress_callback=print_dub_progress,
-            write_manifest=settings.write_manifest,
-            manifest_output_path=settings.manifest_output_path,
-            ffmpeg_executable=settings.ffmpeg_executable,
-            resume=settings.resume,
-            overwrite=settings.overwrite,
         )
     except (
         FFmpegError,
@@ -2170,26 +2317,236 @@ def dub(
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
-    console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
-    console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
-    if artifacts.fitted_transcript_path is not None:
-        console.print(
-            f"[green]Fitted transcript:[/green] {artifacts.fitted_transcript_path}"
-        )
-    if artifacts.mixed_audio_path is not None:
-        console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
-    if artifacts.srt_path is not None:
-        console.print(f"[green]SRT subtitles:[/green] {artifacts.srt_path}")
-    if artifacts.manifest_path is not None:
-        console.print(f"[green]Manifest:[/green] {artifacts.manifest_path}")
+    print_dub_artifacts(artifacts)
+    print_adapter_notes(settings)
 
-    if settings.asr_backend == "fake":
-        console.print("[yellow]Note:[/yellow] using fake ASR adapter.")
-    if settings.diarize and settings.diarization_backend == "fake":
-        console.print("[yellow]Note:[/yellow] using fake diarization adapter.")
-    if settings.translation_backend == "fake":
-        console.print("[yellow]Note:[/yellow] using fake translation adapter.")
-    if settings.text_adapter_backend == "fake":
-        console.print("[yellow]Note:[/yellow] using fake text adapter.")
-    if settings.tts_backend == "fake":
-        console.print("[yellow]Note:[/yellow] using fake TTS adapter.")
+
+@app.command("batch")
+def batch(
+    input_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=True,
+            readable=True,
+            help="Input video file or directory.",
+        ),
+    ],
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to dublaro.toml config file.",
+        ),
+    ] = None,
+    target_language: Annotated[
+        str | None,
+        typer.Option(
+            "--to",
+            help="Target language code.",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Directory for output dubbed videos.",
+        ),
+    ] = None,
+    source_language: Annotated[
+        str | None,
+        typer.Option(
+            "--from",
+            help="Source language code.",
+        ),
+    ] = None,
+    workspace_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--workspace-root",
+            help="Root directory for per-video workspaces. Defaults to .dublaro.",
+        ),
+    ] = None,
+    recursive: Annotated[
+        bool,
+        typer.Option(
+            "--recursive",
+            "-r",
+            help="Search input directories recursively.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show planned batch jobs without running dubbing.",
+        ),
+    ] = False,
+    continue_on_error: Annotated[
+        bool,
+        typer.Option(
+            "--continue-on-error",
+            help="Keep processing remaining videos after a failed job.",
+        ),
+    ] = False,
+    resume_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--resume/--no-resume",
+            help="Reuse valid intermediate workspace artifacts.",
+        ),
+    ] = None,
+    preflight_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--preflight/--no-preflight",
+            help="Check tools and paths before each dubbing run.",
+        ),
+    ] = None,
+    ffmpeg_executable: Annotated[
+        str | None,
+        typer.Option(
+            "--ffmpeg",
+            help="ffmpeg executable name or path.",
+        ),
+    ] = None,
+    overwrite: Annotated[
+        bool | None,
+        typer.Option(
+            "--overwrite/--no-overwrite",
+            help="Replace existing intermediate and output files.",
+        ),
+    ] = None,
+) -> None:
+    """Run the full dubbing pipeline for multiple videos."""
+    try:
+        loaded_config = load_config(config_path)
+        validate_batch_config(
+            loaded_config,
+            output_dir=output_dir,
+            workspace_root=workspace_root,
+        )
+
+        videos = discover_batch_videos(input_path, recursive=recursive)
+        if not videos:
+            raise ValueError(
+                "No supported video files found. Supported extensions: "
+                f"{format_video_extensions()}"
+            )
+
+        output_root = output_dir or resolve_config_path(
+            loaded_config.config.dub.output_dir,
+            loaded_config.base_dir,
+        )
+        workspace_root_path = workspace_root or Path(".dublaro")
+    except (DublaroConfigError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    console.print(f"[green]Batch:[/green] {len(videos)} video(s) found.")
+
+    results: list[BatchDubResult] = []
+    has_failures = False
+
+    for index, video_path in enumerate(videos, start=1):
+        resolved_output_path: Path | None = None
+
+        try:
+            job_output_dir = (
+                default_batch_output_dir(input_path, video_path, output_root)
+                if output_root is not None
+                else None
+            )
+
+            settings = resolve_dub_settings(
+                video_path=video_path,
+                loaded_config=loaded_config,
+                overrides=DubCliOverrides(
+                    source_language=source_language,
+                    target_language=target_language,
+                    output_dir=job_output_dir,
+                    workspace_dir=default_batch_workspace_dir(
+                        input_path,
+                        video_path,
+                        workspace_root_path,
+                    ),
+                    resume=resume_enabled,
+                    overwrite=overwrite,
+                    preflight=preflight_enabled,
+                    ffmpeg_executable=ffmpeg_executable,
+                ),
+            )
+            resolved_output_path = settings.output_path
+            parsed_srt_text_mode, parsed_subtitle_embed = (
+                validate_resolved_dub_settings(settings)
+            )
+
+            console.print()
+            console.print(f"[bold]Batch {index}/{len(videos)}:[/bold] {video_path}")
+            console.print(f"[green]Output:[/green] {settings.output_path}")
+            console.print(f"[green]Workspace:[/green] {settings.workspace_dir}")
+
+            if settings.preflight:
+                report = run_dub_preflight(video_path, settings)
+                print_preflight_report(report)
+
+                if report.has_errors:
+                    raise RuntimeError("Preflight failed.")
+
+            if dry_run:
+                results.append(
+                    BatchDubResult(
+                        video_path=video_path,
+                        output_path=settings.output_path,
+                        status="planned",
+                        message="dry run",
+                    )
+                )
+                continue
+
+            artifacts = run_resolved_dub(
+                video_path,
+                settings,
+                parsed_srt_text_mode=parsed_srt_text_mode,
+                parsed_subtitle_embed=parsed_subtitle_embed,
+                progress_callback=print_dub_progress,
+            )
+
+            print_dub_artifacts(artifacts)
+            results.append(
+                BatchDubResult(
+                    video_path=video_path,
+                    output_path=artifacts.dubbed_video_path,
+                    status="done",
+                    message="ok",
+                )
+            )
+        except (
+            DublaroConfigError,
+            FFmpegError,
+            FileExistsError,
+            FileNotFoundError,
+            RuntimeError,
+            ValueError,
+            typer.BadParameter,
+        ) as error:
+            console.print(f"[red]error:[/red] {error}")
+            has_failures = True
+            results.append(
+                BatchDubResult(
+                    video_path=video_path,
+                    output_path=resolved_output_path,
+                    status="failed",
+                    message=str(error),
+                )
+            )
+
+            if not continue_on_error and not dry_run:
+                break
+
+    print_batch_summary(results)
+
+    if has_failures:
+        raise typer.Exit(code=1)
