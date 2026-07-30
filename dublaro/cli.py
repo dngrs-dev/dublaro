@@ -1300,6 +1300,13 @@ def adapt_text(
             help="Target maximum spoken text density.",
         ),
     ] = 16.0,
+    preserve_meaning: Annotated[
+        bool,
+        typer.Option(
+            "--preserve-meaning/--allow-trimming",
+            help="Keep meaningful text even when it exceeds timing budget.",
+        ),
+    ] = True,
 ) -> None:
     """Adapt translated transcript text for dubbing."""
     adapter = create_text_adapter(text_adapter_backend)
@@ -1313,6 +1320,7 @@ def adapt_text(
             target_language=target_language,
             source_language=source_language,
             max_chars_per_second=max_chars_per_second,
+            preserve_meaning=preserve_meaning,
         )
         saved_path = save_transcript(adapted, adapted_output)
     except (FileNotFoundError, ValueError) as error:

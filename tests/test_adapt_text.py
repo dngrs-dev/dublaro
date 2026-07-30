@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from dublaro.adapters.text_adapter import FakeTextAdapter
+from dublaro.adapters.text_adapter import FakeTextAdapter, RuleBasedTextAdapter
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
     default_adapted_transcript_path,
@@ -80,6 +80,37 @@ def test_adapt_transcript_text_does_not_mutate_original() -> None:
 
     assert transcript.segments[0].adapted_text == ""
     assert adapted.segments[0].adapted_text == "Cześć"
+
+
+def test_adapt_transcript_text_records_timing_metadata() -> None:
+    transcript = Transcript(
+        id="lesson-1",
+        source_language="en",
+        target_language="pl",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=2.0,
+                translated_text="Talk about trees. Do you like trees?",
+            )
+        ],
+    )
+
+    adapted = adapt_transcript_text(
+        transcript,
+        adapter=RuleBasedTextAdapter(),
+        max_chars_per_second=10.0,
+    )
+
+    segment = adapted.segments[0]
+
+    assert segment.adapted_text == "Talk about trees. Do you like trees?"
+    assert segment.metadata["adaptation_char_budget"] == "20"
+    assert segment.metadata["adaptation_over_budget"] == "true"
+    assert segment.metadata["adaptation_status"] == "over_budget_preserved"
+    assert segment.metadata["adaptation_required_chars_per_second"] == "18.00"
+    assert adapted.metadata["text_adapter_preserve_meaning"] == "true"
 
 
 def test_default_adapted_transcript_path() -> None:

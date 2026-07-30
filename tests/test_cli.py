@@ -518,6 +518,7 @@ def test_adapt_text_command_writes_adapted_transcript(tmp_path: Path) -> None:
     assert transcript.segments[0].adapted_text == "Cześć świecie"
     assert transcript.metadata["text_adapter"] == "rules"
     assert transcript.metadata["text_adapter_max_chars_per_second"] == "14.0"
+    assert transcript.metadata["text_adapter_preserve_meaning"] == "true"
 
 
 def test_export_srt_command_writes_subtitles(tmp_path: Path) -> None:

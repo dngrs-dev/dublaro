@@ -32,10 +32,12 @@ class RuleBasedTextAdapter:
         if budget is None or len(text) <= budget:
             return text
 
-        shortened = _remove_parenthetical_text(text)
-        shortened = _remove_low_value_phrases(shortened)
+        shortened = _shorten_without_truncation(text)
 
         if len(shortened) <= budget:
+            return shortened
+
+        if options.preserve_meaning:
             return shortened
 
         return _trim_to_budget(shortened, budget)
@@ -49,6 +51,13 @@ def _character_budget(
         return None
 
     return max(8, int(segment.duration * options.max_chars_per_second))
+
+
+def _shorten_without_truncation(text: str) -> str:
+    shortened = _remove_parenthetical_text(text)
+    shortened = _remove_low_value_phrases(shortened)
+
+    return shortened or text
 
 
 def _remove_parenthetical_text(text: str) -> str:

@@ -29,7 +29,11 @@ def test_rule_based_text_adapter_shortens_text_to_timing_budget() -> None:
             end=1.0,
             translated_text="This is a very long sentence that does not fit",
         ),
-        TextAdaptationOptions(target_language="en", max_chars_per_second=20.0),
+        TextAdaptationOptions(
+            target_language="en",
+            max_chars_per_second=20.0,
+            preserve_meaning=False,
+        ),
     )
 
     assert result == "This is a very long"
@@ -50,3 +54,19 @@ def test_rule_based_text_adapter_removes_low_value_phrases() -> None:
     )
 
     assert result == "this is important"
+
+
+def test_rule_based_text_adapter_preserves_complete_sentences_by_default() -> None:
+    adapter = RuleBasedTextAdapter()
+
+    result = adapter.adapt_segment(
+        Segment(
+            id="seg-0001",
+            start=0.0,
+            end=2.0,
+            translated_text="Talk about trees. Do you like trees?",
+        ),
+        TextAdaptationOptions(target_language="en", max_chars_per_second=10.0),
+    )
+
+    assert result == "Talk about trees. Do you like trees?"
