@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from dublaro import cli
+from dublaro import cli, cli_dub_runner
 from dublaro.adapters.diarization import FakeDiarizationAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav, write_mono_pcm16_wav
@@ -891,7 +891,7 @@ def test_dub_command_runs_full_pipeline(
         output_path.write_bytes(b"fake dubbed video")
         return FakeArtifacts(dubbed_video_path=output_path, workspace_dir=workspace_dir)
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1018,8 +1018,12 @@ def test_dub_command_stops_on_preflight_error(
         calls.append("dub")
         raise AssertionError("dub_video should not run")
 
-    monkeypatch.setattr(cli, "validate_dub_preflight", fake_validate_dub_preflight)
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(
+        cli_dub_runner,
+        "validate_dub_preflight",
+        fake_validate_dub_preflight,
+    )
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1067,7 +1071,7 @@ def test_dub_command_passes_resume(
             workspace_dir=tmp_path / "workspace",
         )
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1203,7 +1207,7 @@ output_path = "runs/manifest.json"
         output_path.write_bytes(b"fake dubbed video")
         return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1269,7 +1273,7 @@ preflight = false
         output_path.write_bytes(b"fake dubbed video")
         return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1334,7 +1338,7 @@ preflight = false
             workspace_dir=workspace_dir,
         )
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1406,7 +1410,7 @@ piper_config_path = "models/piper/voice.onnx.json"
             workspace_dir=workspace_dir,
         )
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1451,7 +1455,7 @@ def test_dub_command_uses_output_dir(
 
         return FakeArtifacts(output_path, workspace_dir)
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1520,7 +1524,7 @@ def test_dub_command_passes_diarization_options(
         output_path.write_bytes(b"fake dubbed video")
         return FakeArtifacts(output_path, kwargs["workspace_dir"])  # type: ignore[arg-type]
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1593,7 +1597,7 @@ def test_batch_command_runs_each_video(
 
         return FakeArtifacts(output_path, workspace_dir)
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1637,7 +1641,7 @@ def test_batch_command_dry_run_does_not_call_dub(
         calls.append("dub")
         raise AssertionError("dub_video should not run during dry run")
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1699,7 +1703,7 @@ def test_batch_command_continues_after_failure(
 
         return FakeArtifacts(output_path, workspace_dir)
 
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
@@ -1792,7 +1796,7 @@ def test_batch_command_dry_run_continues_after_preflight_failure(
         raise AssertionError("dub_video should not run during dry run")
 
     monkeypatch.setattr(cli, "run_dub_preflight", fake_run_dub_preflight)
-    monkeypatch.setattr(cli, "dub_video", fake_dub_video)
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
         cli.app,
