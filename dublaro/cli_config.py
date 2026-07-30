@@ -42,6 +42,7 @@ class DubCliOverrides:
     translation_group_segments: bool | None = None
     max_translation_group_pause_seconds: float | None = None
     max_translation_group_duration_seconds: float | None = None
+    max_translation_sentence_group_duration_seconds: float | None = None
     text_adapter_backend: str | None = None
     tts_backend: str | None = None
     piper_model_path: Path | None = None
@@ -108,6 +109,7 @@ class ResolvedDubSettings:
     translation_group_segments: bool
     max_translation_group_pause_seconds: float
     max_translation_group_duration_seconds: float
+    max_translation_sentence_group_duration_seconds: float
     text_adapter_backend: str
     tts_backend: str
     piper_model_path: Path | None
@@ -487,6 +489,11 @@ def resolve_dub_settings(
             overrides.max_translation_group_duration_seconds,
             config.translation.max_group_duration_seconds,
             12.0,
+        ),
+        max_translation_sentence_group_duration_seconds=_select(
+            overrides.max_translation_sentence_group_duration_seconds,
+            config.translation.max_sentence_group_duration_seconds,
+            24.0,
         ),
         text_adapter_backend=_select(
             overrides.text_adapter_backend,

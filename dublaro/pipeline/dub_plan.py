@@ -41,6 +41,7 @@ class DubOptions:
     translation_group_segments: bool = True
     max_translation_group_pause_seconds: float = 0.8
     max_translation_group_duration_seconds: float = 12.0
+    max_translation_sentence_group_duration_seconds: float = 24.0
     diarize: bool = False
     diarization_min_speakers: int | None = None
     diarization_max_speakers: int | None = None

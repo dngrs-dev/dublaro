@@ -97,6 +97,7 @@ def dub_video(
     translation_group_segments: bool = True,
     max_translation_group_pause_seconds: float = 0.8,
     max_translation_group_duration_seconds: float = 12.0,
+    max_translation_sentence_group_duration_seconds: float = 24.0,
     export_srt: bool = False,
     srt_output_path: str | Path | None = None,
     srt_text_mode: SrtTextMode = "adapted",
@@ -135,6 +136,9 @@ def dub_video(
         translation_group_segments=translation_group_segments,
         max_translation_group_pause_seconds=max_translation_group_pause_seconds,
         max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+        max_translation_sentence_group_duration_seconds=(
+            max_translation_sentence_group_duration_seconds
+        ),
         export_srt=export_srt,
         srt_output_path=Path(srt_output_path) if srt_output_path is not None else None,
         srt_text_mode=srt_text_mode,

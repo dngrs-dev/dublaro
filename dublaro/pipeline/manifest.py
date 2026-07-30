@@ -79,6 +79,7 @@ class DubbingOptionsManifest(BaseModel):
     translation_group_segments: bool
     max_translation_group_pause_seconds: float
     max_translation_group_duration_seconds: float
+    max_translation_sentence_group_duration_seconds: float
     export_srt: bool
     srt_text_mode: str
     subtitle_embed: str

@@ -54,6 +54,7 @@ class TranslationConfig(BaseModel):
     group_segments: bool | None = None
     max_group_pause_seconds: float | None = None
     max_group_duration_seconds: float | None = None
+    max_sentence_group_duration_seconds: float | None = None
 
 
 class TextAdapterConfig(BaseModel):

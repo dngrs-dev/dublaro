@@ -90,3 +90,77 @@ def test_merge_segment_group_creates_one_dubbing_unit() -> None:
     assert merged.speaker == "a"
     assert merged.source_text == "I think that this matters."
     assert merged.metadata["source_segment_ids"] == "seg-0001,seg-0002"
+
+
+def test_group_segments_allows_unfinished_sentence_past_soft_duration() -> None:
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=7.0,
+                speaker="a",
+                source_text="They rent it out to people",
+            ),
+            Segment(
+                id="seg-0002",
+                start=7.0,
+                end=14.0,
+                speaker="a",
+                source_text="because you get to see how they live",
+            ),
+            Segment(
+                id="seg-0003",
+                start=14.0,
+                end=16.0,
+                speaker="a",
+                source_text="and the whole experience.",
+            ),
+        ],
+    )
+
+    groups = group_segments_for_translation(
+        transcript,
+        max_duration_seconds=12.0,
+        max_sentence_duration_seconds=24.0,
+    )
+
+    assert [[segment.id for segment in group.segments] for group in groups] == [
+        ["seg-0001", "seg-0002", "seg-0003"],
+    ]
+
+
+def test_group_segments_splits_unfinished_sentence_at_hard_duration() -> None:
+    transcript = Transcript(
+        id="lesson",
+        source_language="en",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=10.0,
+                speaker="a",
+                source_text="This sentence starts",
+            ),
+            Segment(
+                id="seg-0002",
+                start=10.0,
+                end=25.0,
+                speaker="a",
+                source_text="and keeps going for too long",
+            ),
+        ],
+    )
+
+    groups = group_segments_for_translation(
+        transcript,
+        max_duration_seconds=12.0,
+        max_sentence_duration_seconds=20.0,
+    )
+
+    assert [[segment.id for segment in group.segments] for group in groups] == [
+        ["seg-0001"],
+        ["seg-0002"],
+    ]

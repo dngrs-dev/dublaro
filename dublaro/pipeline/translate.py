@@ -14,6 +14,7 @@ def translate_transcript(
     group_segments: bool = True,
     max_group_pause_seconds: float = 0.8,
     max_group_duration_seconds: float = 12.0,
+    max_sentence_group_duration_seconds: float = 24.0,
 ) -> Transcript:
     resolved_source_language = source_language or transcript.source_language
 
@@ -30,6 +31,7 @@ def translate_transcript(
             transcript,
             max_pause_seconds=max_group_pause_seconds,
             max_duration_seconds=max_group_duration_seconds,
+            max_sentence_duration_seconds=max_sentence_group_duration_seconds,
         )
         translated.segments = [merge_segment_group(group) for group in groups]
 
@@ -41,6 +43,9 @@ def translate_transcript(
         "translation_group_segments": str(group_segments),
         "translation_max_group_pause_seconds": str(max_group_pause_seconds),
         "translation_max_group_duration_seconds": str(max_group_duration_seconds),
+        "translation_max_sentence_group_duration_seconds": str(
+            max_sentence_group_duration_seconds
+        ),
     }
 
     for segment in translated.segments:

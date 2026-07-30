@@ -51,12 +51,21 @@ def group_segments_for_translation(
     *,
     max_pause_seconds: float = 0.8,
     max_duration_seconds: float = 12.0,
+    max_sentence_duration_seconds: float = 24.0,
 ) -> list[SegmentGroup]:
     if max_pause_seconds < 0:
         raise ValueError("max_pause_seconds must be >= 0")
 
     if max_duration_seconds <= 0:
         raise ValueError("max_duration_seconds must be > 0")
+
+    if max_sentence_duration_seconds <= 0:
+        raise ValueError("max_sentence_duration_seconds must be > 0")
+
+    if max_sentence_duration_seconds < max_duration_seconds:
+        raise ValueError(
+            "max_sentence_duration_seconds must be >= max_duration_seconds"
+        )
 
     groups: list[SegmentGroup] = []
     current: list[Segment] = []
@@ -69,12 +78,13 @@ def group_segments_for_translation(
         previous = current[-1]
         pause_seconds = segment.start - previous.end
         candidate_duration = segment.end - current[0].start
+        previous_ends_sentence = _ends_sentence(previous.source_text)
 
         should_split = (
             segment.speaker != previous.speaker
             or pause_seconds > max_pause_seconds
-            or candidate_duration > max_duration_seconds
-            or _ends_sentence(previous.source_text)
+            or previous_ends_sentence
+            or candidate_duration > max_sentence_duration_seconds
         )
 
         if should_split:

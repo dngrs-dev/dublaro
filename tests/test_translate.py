@@ -36,6 +36,9 @@ def test_translate_transcript_translates_segments() -> None:
     assert translated.segments[0].end == 1.5
     assert translated.segments[0].speaker == "speaker-1"
     assert translated.metadata["translation_adapter"] == "fake-translation"
+    assert (
+        translated.metadata["translation_max_sentence_group_duration_seconds"] == "24.0"
+    )
 
 
 def test_translate_transcript_does_not_mutate_original() -> None:

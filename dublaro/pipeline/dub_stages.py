@@ -304,6 +304,9 @@ def _translate_source_transcript(
             max_group_duration_seconds=(
                 context.options.max_translation_group_duration_seconds
             ),
+            max_sentence_group_duration_seconds=(
+                context.options.max_translation_sentence_group_duration_seconds
+            ),
         )
         save_transcript(translated_transcript, translated_transcript_path)
         return translated_transcript
@@ -749,6 +752,9 @@ def _write_manifest(
                 ),
                 max_translation_group_duration_seconds=(
                     run_options.max_translation_group_duration_seconds
+                ),
+                max_translation_sentence_group_duration_seconds=(
+                    run_options.max_translation_sentence_group_duration_seconds
                 ),
                 export_srt=run_options.export_srt,
                 srt_text_mode=run_options.srt_text_mode,

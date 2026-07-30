@@ -528,6 +528,9 @@ def run_resolved_dub(
         translation_group_segments=settings.translation_group_segments,
         max_translation_group_pause_seconds=settings.max_translation_group_pause_seconds,
         max_translation_group_duration_seconds=settings.max_translation_group_duration_seconds,
+        max_translation_sentence_group_duration_seconds=(
+            settings.max_translation_sentence_group_duration_seconds
+        ),
         asr_sample_rate=settings.asr_sample_rate,
         speech_sample_rate=settings.speech_sample_rate,
         fit_speech=settings.fit_speech,
@@ -864,6 +867,13 @@ def translate(
             help="Maximum duration for one grouped translation unit.",
         ),
     ] = 12.0,
+    max_sentence_group_duration_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-sentence-group-duration",
+            help="Hard maximum duration for one unfinished sentence group.",
+        ),
+    ] = 24.0,
 ) -> None:
     """Translate transcript JSON into another language."""
     adapter = create_translation_adapter(
@@ -885,6 +895,7 @@ def translate(
             group_segments=group_segments,
             max_group_pause_seconds=max_group_pause_seconds,
             max_group_duration_seconds=max_group_duration_seconds,
+            max_sentence_group_duration_seconds=max_sentence_group_duration_seconds,
         )
         saved_path = save_transcript(translated, translated_output)
     except (FileNotFoundError, RuntimeError, ValueError) as error:
@@ -938,6 +949,13 @@ def preview_units(
             help="Maximum duration for one grouped translation unit.",
         ),
     ] = 12.0,
+    max_sentence_group_duration_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-sentence-group-duration",
+            help="Hard maximum duration for one unfinished sentence group.",
+        ),
+    ] = 24.0,
 ) -> None:
     """Preview how transcript segments will be grouped before translation."""
     try:
@@ -946,6 +964,7 @@ def preview_units(
             transcript,
             max_pause_seconds=max_group_pause_seconds,
             max_duration_seconds=max_group_duration_seconds,
+            max_sentence_duration_seconds=max_sentence_group_duration_seconds,
         )
     except (FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
@@ -2051,6 +2070,13 @@ def dub(
             help="Maximum duration for one grouped translation unit.",
         ),
     ] = None,
+    max_translation_sentence_group_duration_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--max-sentence-group-duration",
+            help="Hard maximum duration for one unfinished sentence translation unit.",
+        ),
+    ] = None,
     asr_sample_rate: Annotated[
         int | None,
         typer.Option(
@@ -2268,6 +2294,9 @@ def dub(
                 translation_group_segments=translation_group_segments,
                 max_translation_group_pause_seconds=max_translation_group_pause_seconds,
                 max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+                max_translation_sentence_group_duration_seconds=(
+                    max_translation_sentence_group_duration_seconds
+                ),
                 text_adapter_backend=text_adapter_backend,
                 tts_backend=tts_backend,
                 piper_model_path=piper_model_path,
