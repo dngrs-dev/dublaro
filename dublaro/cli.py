@@ -11,15 +11,14 @@ from dublaro.audio.ffmpeg import (
     extract_audio_from_video,
 )
 from dublaro.cli_batch import run_batch_dubbing
-from dublaro.cli_config import (
-    DubCliOverrides,
-    resolve_dub_settings,
-)
 from dublaro.cli_dub_runner import (
     parse_srt_text_mode,
     run_dub_preflight,
     run_resolved_dub,
-    validate_resolved_dub_settings,
+)
+from dublaro.cli_dub_settings import (
+    DubCommandOverrides,
+    resolve_dub_command_settings,
 )
 from dublaro.cli_factories import (
     create_asr_adapter,
@@ -49,7 +48,6 @@ from dublaro.cli_rendering import (
 )
 from dublaro.config import (
     DublaroConfigError,
-    load_config,
 )
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
@@ -1554,19 +1552,18 @@ def dub(
 ) -> None:
     """Run the full dubbing pipeline."""
     try:
-        loaded_config = load_config(config_path)
-        settings = resolve_dub_settings(
+        resolved_dub = resolve_dub_command_settings(
             video_path=video_path,
-            loaded_config=loaded_config,
-            overrides=DubCliOverrides(
+            config_path=config_path,
+            overrides=DubCommandOverrides(
                 source_language=source_language,
                 target_language=target_language,
                 output_path=output_path,
                 output_dir=output_dir,
                 workspace_dir=workspace_dir,
-                resume=resume_enabled,
+                resume_enabled=resume_enabled,
                 overwrite=overwrite,
-                preflight=preflight_enabled,
+                preflight_enabled=preflight_enabled,
                 ffmpeg_executable=ffmpeg_executable,
                 asr_sample_rate=asr_sample_rate,
                 speech_sample_rate=speech_sample_rate,
@@ -1574,7 +1571,7 @@ def dub(
                 model_size=model_size,
                 device=device,
                 compute_type=compute_type,
-                diarize=diarize_enabled,
+                diarize_enabled=diarize_enabled,
                 diarization_backend=diarization_backend,
                 diarization_model_id=diarization_model_id,
                 diarization_device=diarization_device,
@@ -1585,7 +1582,9 @@ def dub(
                 install_package=install_package,
                 translation_group_segments=translation_group_segments,
                 max_translation_group_pause_seconds=max_translation_group_pause_seconds,
-                max_translation_group_duration_seconds=max_translation_group_duration_seconds,
+                max_translation_group_duration_seconds=(
+                    max_translation_group_duration_seconds
+                ),
                 max_translation_sentence_group_duration_seconds=(
                     max_translation_sentence_group_duration_seconds
                 ),
@@ -1595,31 +1594,30 @@ def dub(
                 piper_config_path=piper_config_path,
                 piper_executable=piper_executable,
                 piper_speaker=piper_speaker,
-                fit_speech=fit_speech_enabled,
+                fit_speech_enabled=fit_speech_enabled,
                 max_speech_speedup=max_speech_speedup,
                 min_speech_overrun_seconds=min_speech_overrun_seconds,
-                fit_video=fit_video_enabled,
+                fit_video_enabled=fit_video_enabled,
                 max_video_slowdown=max_video_slowdown,
-                mix_original_audio=mix_original_audio_enabled,
+                mix_original_audio_enabled=mix_original_audio_enabled,
                 original_audio_gain=original_audio_gain,
                 ducking_gain=ducking_gain,
                 speech_gain=speech_gain,
                 ducking_margin_seconds=ducking_margin_seconds,
                 ducking_fade_seconds=ducking_fade_seconds,
-                export_srt=export_srt_enabled,
+                export_srt_enabled=export_srt_enabled,
                 srt_output_path=srt_output_path,
                 srt_text_mode=srt_text_mode,
                 subtitle_embed=subtitle_embed,
-                write_manifest=write_manifest_enabled,
+                write_manifest_enabled=write_manifest_enabled,
                 manifest_output_path=manifest_output_path,
             ),
-        )
-        parsed_srt_text_mode, parsed_subtitle_embed = validate_resolved_dub_settings(
-            settings
         )
     except (DublaroConfigError, ValueError, typer.BadParameter) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
+
+    settings = resolved_dub.settings
 
     if settings.preflight:
         report = run_dub_preflight(video_path, settings)
@@ -1632,8 +1630,8 @@ def dub(
         artifacts = run_resolved_dub(
             video_path,
             settings,
-            parsed_srt_text_mode=parsed_srt_text_mode,
-            parsed_subtitle_embed=parsed_subtitle_embed,
+            parsed_srt_text_mode=resolved_dub.srt_text_mode,
+            parsed_subtitle_embed=resolved_dub.subtitle_embed,
             progress_callback=print_dub_progress,
         )
     except (
