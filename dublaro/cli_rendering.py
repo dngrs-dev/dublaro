@@ -1,9 +1,7 @@
-from dataclasses import dataclass
-from pathlib import Path
-
 from rich.console import Console
 from rich.table import Table
 
+from dublaro.cli_batch import BatchDubJob, BatchDubResult
 from dublaro.cli_config import ResolvedDubSettings
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
@@ -13,14 +11,6 @@ from dublaro.pipeline.dub import (
 from dublaro.pipeline.preflight import DubPreflightReport
 
 console = Console()
-
-
-@dataclass(frozen=True)
-class BatchDubResult:
-    video_path: Path
-    output_path: Path | None
-    status: str
-    message: str
 
 
 def print_preflight_report(report: DubPreflightReport) -> None:
@@ -99,6 +89,17 @@ def print_adapter_notes(settings: ResolvedDubSettings) -> None:
         console.print("[yellow]Note:[/yellow] using fake text adapter.")
     if settings.tts_backend == "fake":
         console.print("[yellow]Note:[/yellow] using fake TTS adapter.")
+
+
+def print_batch_discovered(video_count: int) -> None:
+    console.print(f"[green]Batch:[/green] {video_count} video(s) found.")
+
+
+def print_batch_job_started(job: BatchDubJob) -> None:
+    console.print()
+    console.print(f"[bold]Batch {job.index}/{job.total}:[/bold] {job.video_path}")
+    console.print(f"[green]Output:[/green] {job.settings.output_path}")
+    console.print(f"[green]Workspace:[/green] {job.settings.workspace_dir}")
 
 
 def print_batch_summary(results: list[BatchDubResult]) -> None:

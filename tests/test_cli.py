@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from dublaro import cli, cli_dub_runner
+from dublaro import cli, cli_batch, cli_dub_runner
 from dublaro.adapters.diarization import FakeDiarizationAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav, write_mono_pcm16_wav
@@ -1795,7 +1795,7 @@ def test_batch_command_dry_run_continues_after_preflight_failure(
         calls.append("dub")
         raise AssertionError("dub_video should not run during dry run")
 
-    monkeypatch.setattr(cli, "run_dub_preflight", fake_run_dub_preflight)
+    monkeypatch.setattr(cli_batch, "run_dub_preflight", fake_run_dub_preflight)
     monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
 
     result = runner.invoke(
