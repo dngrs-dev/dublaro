@@ -1,8 +1,17 @@
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from dublaro.cli_batch import BatchDubJob, BatchDubResult
 from dublaro.cli_config import ResolvedDubSettings
+from dublaro.cli_preview import (
+    SpeakerPreview,
+    TimingPreviewReport,
+    TranslationUnitsPreview,
+    VoiceSamplesPreview,
+    format_optional_factor,
+    format_optional_seconds,
+)
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
     DubbingProgressStatus,
@@ -130,6 +139,128 @@ def print_batch_summary(results: list[BatchDubResult]) -> None:
             str(result.video_path),
             str(result.output_path or ""),
             result.message,
+        )
+
+    console.print(table)
+
+
+def print_translation_units_preview(preview: TranslationUnitsPreview) -> None:
+    console.print(
+        "[green]Translation units:[/green] "
+        f"{len(preview.groups)} from {preview.segment_count} segments"
+    )
+
+    table = Table(title="Translation Unit Preview")
+    table.add_column("Unit")
+    table.add_column("Segments")
+    table.add_column("Window")
+    table.add_column("Duration")
+    table.add_column("Speaker")
+    table.add_column("Source text", overflow="fold", ratio=3)
+
+    for group in preview.groups:
+        table.add_row(
+            group.id,
+            ", ".join(segment.id for segment in group.segments),
+            f"{group.start:.2f}-{group.end:.2f}s",
+            f"{group.duration:.2f}s",
+            group.speaker or "",
+            Text(group.source_text),
+        )
+
+    console.print(table)
+
+
+def print_speaker_preview(preview: SpeakerPreview) -> None:
+    console.print(
+        "[green]Speakers:[/green] "
+        f"{len(preview.rows)} from {preview.segment_count} segments"
+    )
+
+    table = Table(title="Speaker Preview")
+    table.add_column("Speaker", no_wrap=True)
+    table.add_column("Segments", justify="right", no_wrap=True)
+    table.add_column("Speaking Time", justify="right", no_wrap=True)
+    table.add_column("Window", no_wrap=True)
+    table.add_column("Voice Route", overflow="fold", ratio=4)
+
+    for row in preview.rows:
+        table.add_row(
+            row.speaker_id,
+            str(row.segment_count),
+            f"{row.total_duration_seconds:.2f}s",
+            row.window,
+            Text(row.voice_route),
+        )
+
+    console.print(table)
+
+    if preview.configured_speaker_count and preview.unconfigured_speakers:
+        console.print(
+            "[yellow]Warning:[/yellow] No configured voice profile for detected "
+            f"speakers: {', '.join(preview.unconfigured_speakers)}. "
+            "They will use fallback TTS."
+        )
+
+    if preview.unused_voice_profiles:
+        console.print(
+            "[yellow]Warning:[/yellow] Configured voice profiles not present in "
+            f"transcript: {', '.join(preview.unused_voice_profiles)}."
+        )
+
+
+def print_voice_samples_preview(preview: VoiceSamplesPreview) -> None:
+    console.print(
+        f"[green]Voice samples:[/green] {len(preview.samples)} saved to {preview.output_dir}"
+    )
+
+    table = Table(title="Voice Sample Preview")
+    table.add_column("Speaker", no_wrap=True)
+    table.add_column("Name")
+    table.add_column("Backend")
+    table.add_column("Output")
+
+    for sample in preview.samples:
+        table.add_row(
+            sample.speaker_id,
+            sample.display_name or "",
+            sample.tts_backend,
+            str(sample.output_path),
+        )
+
+    console.print(table)
+
+
+def print_timing_preview_report(report: TimingPreviewReport) -> None:
+    console.print(
+        "[green]Timing preview:[/green] "
+        f"{len(report.previews)} segments, "
+        f"{report.attention_count} need attention, "
+        f"{report.video_fit_count} need video fitting"
+    )
+
+    if not report.shown_previews:
+        console.print("[green]No timing issues to show.[/green]")
+        return
+
+    table = Table(title="Timing Preview")
+    table.add_column("Segment", no_wrap=True)
+    table.add_column("Target", justify="right", no_wrap=True)
+    table.add_column("Audio", justify="right", no_wrap=True)
+    table.add_column("Overrun", justify="right", no_wrap=True)
+    table.add_column("Req", justify="right", no_wrap=True)
+    table.add_column("Video", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+
+    for preview in report.shown_previews:
+        table.add_row(
+            preview.segment_id,
+            format_optional_seconds(preview.target_duration),
+            format_optional_seconds(preview.audio_duration),
+            format_optional_seconds(preview.overrun_seconds),
+            format_optional_factor(preview.required_speedup),
+            "yes" if preview.needs_video_fit else "no",
+            preview.status,
         )
 
     console.print(table)

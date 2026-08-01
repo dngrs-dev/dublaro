@@ -1,14 +1,11 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.table import Table
-from rich.text import Text
 
 from dublaro import __version__
 from dublaro.adapters.asr import TranscriptionOptions
-from dublaro.adapters.tts import TtsAdapter
 from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
@@ -26,10 +23,15 @@ from dublaro.cli_dub_runner import (
 )
 from dublaro.cli_factories import (
     create_asr_adapter,
-    create_speaker_voices,
     create_text_adapter,
     create_translation_adapter,
     create_tts_adapter,
+)
+from dublaro.cli_preview import (
+    build_speaker_preview,
+    build_timing_preview_report,
+    build_translation_units_preview,
+    build_voice_samples_preview,
 )
 from dublaro.cli_rendering import (
     console,
@@ -40,12 +42,14 @@ from dublaro.cli_rendering import (
     print_dub_artifacts,
     print_dub_progress,
     print_preflight_report,
+    print_speaker_preview,
+    print_timing_preview_report,
+    print_translation_units_preview,
+    print_voice_samples_preview,
 )
 from dublaro.config import (
     DublaroConfigError,
-    LoadedConfig,
     load_config,
-    resolve_config_path,
 )
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
@@ -68,12 +72,6 @@ from dublaro.pipeline.mix import (
     default_mixed_audio_path,
     mix_original_audio_with_dubbed_speech,
 )
-from dublaro.pipeline.speakers import (
-    SpeakerSummary,
-    find_unconfigured_speakers,
-    find_unused_voice_profiles,
-    summarize_transcript_speakers,
-)
 from dublaro.pipeline.subtitles import (
     default_srt_path,
     save_srt,
@@ -84,9 +82,7 @@ from dublaro.pipeline.synthesize import (
     synthesize_transcript_speech,
 )
 from dublaro.pipeline.timing import (
-    TimingPreview,
     analyze_speech_timing,
-    preview_speech_timing,
 )
 from dublaro.pipeline.transcribe import (
     default_transcript_path,
@@ -98,8 +94,6 @@ from dublaro.pipeline.translate import (
     default_translated_transcript_path,
     translate_transcript,
 )
-from dublaro.pipeline.units import group_segments_for_translation
-from dublaro.pipeline.voice_preview import synthesize_voice_samples
 
 app = typer.Typer(
     name="dublaro",
@@ -127,83 +121,6 @@ def main(
     ] = False,
 ) -> None:
     pass
-
-
-@dataclass(frozen=True)
-class SpeakerVoicePreview:
-    source: str
-    display_name: str | None
-    tts_backend: str
-    piper_model_path: Path | None
-    piper_config_path: Path | None
-    piper_speaker: int | None
-
-
-def preview_speaker_voice(
-    speaker_id: str,
-    loaded_config: LoadedConfig,
-) -> SpeakerVoicePreview:
-    config = loaded_config.config
-    base_dir = loaded_config.base_dir
-    fallback_tts = config.dub.tts
-    voice_config = config.voices.get(speaker_id)
-
-    if voice_config is None:
-        return SpeakerVoicePreview(
-            source="fallback",
-            display_name=None,
-            tts_backend=fallback_tts.backend or "fake",
-            piper_model_path=resolve_config_path(
-                fallback_tts.piper_model_path, base_dir
-            ),
-            piper_config_path=resolve_config_path(
-                fallback_tts.piper_config_path, base_dir
-            ),
-            piper_speaker=fallback_tts.piper_speaker,
-        )
-
-    return SpeakerVoicePreview(
-        source="configured",
-        display_name=voice_config.display_name,
-        tts_backend=voice_config.tts_backend or fallback_tts.backend or "fake",
-        piper_model_path=(
-            resolve_config_path(voice_config.piper_model_path, base_dir)
-            or resolve_config_path(fallback_tts.piper_model_path, base_dir)
-        ),
-        piper_config_path=(
-            resolve_config_path(voice_config.piper_config_path, base_dir)
-            or resolve_config_path(fallback_tts.piper_config_path, base_dir)
-        ),
-        piper_speaker=(
-            voice_config.piper_speaker
-            if voice_config.piper_speaker is not None
-            else fallback_tts.piper_speaker
-        ),
-    )
-
-
-def format_speaker_window(summary: SpeakerSummary) -> str:
-    return f"{summary.first_start:.2f}-{summary.last_end:.2f}s"
-
-
-def format_voice_route(preview: SpeakerVoicePreview) -> str:
-    parts = [preview.source]
-
-    if preview.display_name:
-        parts.append(preview.display_name)
-
-    parts.append(preview.tts_backend)
-
-    if preview.tts_backend == "piper":
-        if preview.piper_model_path is None:
-            parts.append("(missing model)")
-        else:
-            parts.append(str(preview.piper_model_path))
-
-        if preview.piper_speaker is not None:
-            parts.append(f"speaker={preview.piper_speaker}")
-
-    return " | ".join(parts)
 
 
 @app.command("extract-audio")
@@ -458,22 +375,6 @@ def translate(
         console.print("[yellow]Note:[/yellow] using fake translation adapter.")
 
 
-def format_optional_seconds(value: float | None) -> str:
-    if value is None:
-        return ""
-    return f"{value:.2f}s"
-
-
-def format_optional_factor(value: float | None) -> str:
-    if value is None:
-        return ""
-    return f"{value:.2f}x"
-
-
-def timing_preview_needs_attention(preview: TimingPreview) -> bool:
-    return preview.status != "ok"
-
-
 @app.command("preview-units")
 def preview_units(
     transcript_path: Annotated[
@@ -510,41 +411,17 @@ def preview_units(
 ) -> None:
     """Preview how transcript segments will be grouped before translation."""
     try:
-        transcript = load_transcript(transcript_path)
-        groups = group_segments_for_translation(
-            transcript,
-            max_pause_seconds=max_group_pause_seconds,
-            max_duration_seconds=max_group_duration_seconds,
-            max_sentence_duration_seconds=max_sentence_group_duration_seconds,
+        preview = build_translation_units_preview(
+            transcript_path,
+            max_group_pause_seconds=max_group_pause_seconds,
+            max_group_duration_seconds=max_group_duration_seconds,
+            max_sentence_group_duration_seconds=max_sentence_group_duration_seconds,
         )
     except (FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
-    console.print(
-        "[green]Translation units:[/green] "
-        f"{len(groups)} from {len(transcript.segments)} segments"
-    )
-
-    table = Table(title="Translation Unit Preview")
-    table.add_column("Unit")
-    table.add_column("Segments")
-    table.add_column("Window")
-    table.add_column("Duration")
-    table.add_column("Speaker")
-    table.add_column("Source text", overflow="fold", ratio=3)
-
-    for group in groups:
-        table.add_row(
-            group.id,
-            ", ".join(segment.id for segment in group.segments),
-            f"{group.start:.2f}-{group.end:.2f}s",
-            f"{group.duration:.2f}s",
-            group.speaker or "",
-            Text(group.source_text),
-        )
-
-    console.print(table)
+    print_translation_units_preview(preview)
 
 
 @app.command("preview-speakers")
@@ -570,59 +447,15 @@ def preview_speakers(
 ) -> None:
     """Preview detected speakers and configured voice routing."""
     try:
-        transcript = load_transcript(transcript_path)
-        loaded_config = load_config(config_path)
-        summaries = summarize_transcript_speakers(transcript)
-        configured_speaker_ids = tuple(loaded_config.config.voices)
-        unconfigured_speakers = find_unconfigured_speakers(
-            transcript,
-            configured_speaker_ids,
-        )
-        unused_voice_profiles = find_unused_voice_profiles(
-            transcript,
-            configured_speaker_ids,
+        preview = build_speaker_preview(
+            transcript_path,
+            config_path=config_path,
         )
     except (DublaroConfigError, FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
-    console.print(
-        "[green]Speakers:[/green] "
-        f"{len(summaries)} from {len(transcript.segments)} segments"
-    )
-
-    table = Table(title="Speaker Preview")
-    table.add_column("Speaker", no_wrap=True)
-    table.add_column("Segments", justify="right", no_wrap=True)
-    table.add_column("Speaking Time", justify="right", no_wrap=True)
-    table.add_column("Window", no_wrap=True)
-    table.add_column("Voice Route", overflow="fold", ratio=4)
-
-    for summary in summaries:
-        voice_preview = preview_speaker_voice(summary.speaker_id, loaded_config)
-
-        table.add_row(
-            summary.speaker_id,
-            str(summary.segment_count),
-            f"{summary.total_duration_seconds:.2f}s",
-            format_speaker_window(summary),
-            Text(format_voice_route(voice_preview)),
-        )
-
-    console.print(table)
-
-    if configured_speaker_ids and unconfigured_speakers:
-        console.print(
-            "[yellow]Warning:[/yellow] No configured voice profile for detected "
-            f"speakers: {', '.join(unconfigured_speakers)}. "
-            "They will use fallback TTS."
-        )
-
-    if unused_voice_profiles:
-        console.print(
-            "[yellow]Warning:[/yellow] Configured voice profiles not present in "
-            f"transcript: {', '.join(unused_voice_profiles)}."
-        )
+    print_speaker_preview(preview)
 
 
 @app.command("preview-voices")
@@ -667,68 +500,18 @@ def preview_voices(
 ) -> None:
     """Generate short TTS samples for configured speaker voices."""
     try:
-        loaded_config = load_config(config_path)
-
-        if language is None and loaded_config.config.dub.target_language is None:
-            raise ValueError(
-                "--language is required when dub.target_language is not set in config."
-            )
-
-        settings = resolve_dub_settings(
-            video_path=Path("voice-preview.mp4"),
-            loaded_config=loaded_config,
-            overrides=DubCliOverrides(
-                target_language=language,
-                speech_sample_rate=sample_rate,
-            ),
-        )
-
-        speaker_voices = create_speaker_voices(settings.voice_profiles)
-
-        fallback_adapter: TtsAdapter | None = None
-        if not speaker_voices:
-            fallback_adapter = create_tts_adapter(
-                settings.tts_backend,
-                piper_model_path=settings.piper_model_path,
-                piper_config_path=settings.piper_config_path,
-                piper_executable=settings.piper_executable,
-                piper_speaker=settings.piper_speaker,
-            )
-
-        sample_output_dir = output_dir or settings.workspace_dir / "voice-samples"
-
-        samples = synthesize_voice_samples(
+        preview = build_voice_samples_preview(
+            config_path=config_path,
             text=text,
-            output_dir=sample_output_dir,
-            language=settings.target_language,
-            sample_rate=settings.speech_sample_rate,
-            speaker_voices=speaker_voices,
-            fallback_adapter=fallback_adapter,
-            fallback_tts_backend=settings.tts_backend,
+            output_dir=output_dir,
+            language=language,
+            sample_rate=sample_rate,
         )
     except (DublaroConfigError, FileNotFoundError, RuntimeError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
-    console.print(
-        f"[green]Voice samples:[/green] {len(samples)} saved to {sample_output_dir}"
-    )
-
-    table = Table(title="Voice Sample Preview")
-    table.add_column("Speaker", no_wrap=True)
-    table.add_column("Name")
-    table.add_column("Backend")
-    table.add_column("Output")
-
-    for sample in samples:
-        table.add_row(
-            sample.speaker_id,
-            sample.display_name or "",
-            sample.tts_backend,
-            str(sample.output_path),
-        )
-
-    console.print(table)
+    print_voice_samples_preview(preview)
 
 
 @app.command("preview-timing")
@@ -767,59 +550,17 @@ def preview_timing(
 ) -> None:
     """Preview segment timing before speech or video fitting."""
     try:
-        transcript = load_transcript(transcript_path)
-        previews = preview_speech_timing(
-            transcript,
+        report = build_timing_preview_report(
+            transcript_path,
             max_speedup=max_speedup,
             min_overrun_seconds=min_overrun_seconds,
+            only_issues=only_issues,
         )
     except (FileNotFoundError, ValueError) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
-    attention_count = sum(
-        timing_preview_needs_attention(preview) for preview in previews
-    )
-    video_fit_count = sum(preview.needs_video_fit for preview in previews)
-
-    console.print(
-        "[green]Timing preview:[/green] "
-        f"{len(previews)} segments, "
-        f"{attention_count} need attention, "
-        f"{video_fit_count} need video fitting"
-    )
-
-    shown_previews = (
-        [preview for preview in previews if timing_preview_needs_attention(preview)]
-        if only_issues
-        else previews
-    )
-
-    if not shown_previews:
-        console.print("[green]No timing issues to show.[/green]")
-        return
-
-    table = Table(title="Timing Preview")
-    table.add_column("Segment", no_wrap=True)
-    table.add_column("Target", justify="right", no_wrap=True)
-    table.add_column("Audio", justify="right", no_wrap=True)
-    table.add_column("Overrun", justify="right", no_wrap=True)
-    table.add_column("Req", justify="right", no_wrap=True)
-    table.add_column("Video", no_wrap=True)
-    table.add_column("Status", no_wrap=True)
-
-    for preview in shown_previews:
-        table.add_row(
-            preview.segment_id,
-            format_optional_seconds(preview.target_duration),
-            format_optional_seconds(preview.audio_duration),
-            format_optional_seconds(preview.overrun_seconds),
-            format_optional_factor(preview.required_speedup),
-            "yes" if preview.needs_video_fit else "no",
-            preview.status,
-        )
-
-    console.print(table)
+    print_timing_preview_report(report)
 
 
 @app.command("adapt-text")
