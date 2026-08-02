@@ -10,29 +10,29 @@ from dublaro.audio.ffmpeg import (
     FFmpegError,
     extract_audio_from_video,
 )
-from dublaro.cli_batch import run_batch_dubbing
-from dublaro.cli_dub_runner import (
+from dublaro.cli.batch import run_batch_dubbing
+from dublaro.cli.dub_runner import (
     parse_srt_text_mode,
     run_dub_preflight,
     run_resolved_dub,
 )
-from dublaro.cli_dub_settings import (
+from dublaro.cli.dub_settings import (
     DubCommandOverrides,
     resolve_dub_command_settings,
 )
-from dublaro.cli_factories import (
+from dublaro.cli.factories import (
     create_asr_adapter,
     create_text_adapter,
     create_translation_adapter,
     create_tts_adapter,
 )
-from dublaro.cli_preview import (
+from dublaro.cli.preview import (
     build_speaker_preview,
     build_timing_preview_report,
     build_translation_units_preview,
     build_voice_samples_preview,
 )
-from dublaro.cli_rendering import (
+from dublaro.cli.rendering import (
     console,
     print_adapter_notes,
     print_batch_discovered,

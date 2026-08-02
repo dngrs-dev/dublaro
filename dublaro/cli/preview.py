@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dublaro.adapters.tts import TtsAdapter
-from dublaro.cli_config import DubCliOverrides, resolve_dub_settings
-from dublaro.cli_factories import (
+from dublaro.cli.factories import (
     create_speaker_voices,
     create_tts_adapter,
 )
+from dublaro.cli_config import DubCliOverrides, resolve_dub_settings
 from dublaro.config import LoadedConfig, load_config, resolve_config_path
 from dublaro.pipeline.speakers import (
     find_unconfigured_speakers,

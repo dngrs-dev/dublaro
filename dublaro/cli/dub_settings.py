@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from dublaro.cli.dub_runner import validate_resolved_dub_settings
 from dublaro.cli_config import (
     DubCliOverrides,
     ResolvedDubSettings,
     resolve_dub_settings,
 )
-from dublaro.cli_dub_runner import validate_resolved_dub_settings
 from dublaro.config import load_config
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 

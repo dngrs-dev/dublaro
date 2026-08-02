@@ -2,9 +2,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from dublaro.cli_batch import BatchDubJob, BatchDubResult
-from dublaro.cli_config import ResolvedDubSettings
-from dublaro.cli_preview import (
+from dublaro.cli.batch import BatchDubJob, BatchDubResult
+from dublaro.cli.preview import (
     SpeakerPreview,
     TimingPreviewReport,
     TranslationUnitsPreview,
@@ -12,6 +11,7 @@ from dublaro.cli_preview import (
     format_optional_factor,
     format_optional_seconds,
 )
+from dublaro.cli_config import ResolvedDubSettings
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
     DubbingProgressStatus,

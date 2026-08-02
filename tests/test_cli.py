@@ -1,15 +1,20 @@
 from array import array
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
 
 import pytest
-from dublaro import cli, cli_batch, cli_dub_runner
 from dublaro.adapters.diarization import FakeDiarizationAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav, write_mono_pcm16_wav
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
 from dublaro.schemas import Segment, Transcript
 from typer.testing import CliRunner
+
+cli = import_module("dublaro.cli.app")
+cli_batch = import_module("dublaro.cli.batch")
+cli_dub_runner = import_module("dublaro.cli.dub_runner")
+
 
 runner = CliRunner()
 
