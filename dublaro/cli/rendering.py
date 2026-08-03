@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
@@ -12,6 +14,7 @@ from dublaro.cli.preview import (
     format_optional_factor,
     format_optional_seconds,
 )
+from dublaro.cli.workspace import WorkspaceInspectionReport
 from dublaro.cli_config import ResolvedDubSettings
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
@@ -83,6 +86,47 @@ def print_doctor_report(report: DoctorReport) -> None:
         )
 
     console.print(table)
+
+
+def print_workspace_inspection_report(report: WorkspaceInspectionReport) -> None:
+    console.print(f"[green]Workspace:[/green] {report.workspace_dir}")
+    console.print(
+        "[green]Artifacts:[/green] "
+        f"{report.present_count} present, {report.missing_count} missing, "
+        f"{len(report.manifest_paths)} manifest file(s)"
+    )
+
+    if not report.artifacts:
+        console.print("[yellow]No known workspace artifacts found.[/yellow]")
+        return
+
+    table = Table(title="Workspace Artifacts")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Category", no_wrap=True)
+    table.add_column("Artifact", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Details", no_wrap=True)
+    table.add_column("Path", overflow="fold", ratio=4)
+
+    for artifact in report.artifacts:
+        style = "green" if artifact.status == "present" else "yellow"
+        table.add_row(
+            f"[{style}]{artifact.status}[/{style}]",
+            artifact.category,
+            artifact.label,
+            artifact.source,
+            artifact.details or "",
+            _format_workspace_artifact_path(report.workspace_dir, artifact.path),
+        )
+
+    console.print(table)
+
+
+def _format_workspace_artifact_path(workspace_dir: Path, path: Path) -> str:
+    try:
+        return str(path.relative_to(workspace_dir))
+    except ValueError:
+        return str(path)
 
 
 def print_dub_progress(
