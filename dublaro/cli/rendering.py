@@ -3,6 +3,7 @@ from rich.table import Table
 from rich.text import Text
 
 from dublaro.cli.batch import BatchDubJob, BatchDubResult
+from dublaro.cli.doctor import DoctorReport
 from dublaro.cli.preview import (
     SpeakerPreview,
     TimingPreviewReport,
@@ -45,6 +46,40 @@ def print_preflight_report(report: DubPreflightReport) -> None:
             issue.code,
             issue.message,
             issue.hint or "",
+        )
+
+    console.print(table)
+
+
+def print_doctor_report(report: DoctorReport) -> None:
+    if report.has_errors:
+        console.print("[red]Doctor found problems.[/red]")
+    elif report.has_warnings:
+        console.print("[yellow]Doctor warnings.[/yellow]")
+    else:
+        console.print("[green]Doctor ok.[/green]")
+
+    table = Table(title="Doctor")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Category", no_wrap=True)
+    table.add_column("Check", no_wrap=True)
+    table.add_column("Message", overflow="fold", ratio=3)
+    table.add_column("Hint", overflow="fold", ratio=2)
+
+    for check in report.checks:
+        style = {
+            "ok": "green",
+            "warning": "yellow",
+            "error": "red",
+            "skipped": "dim",
+        }[check.status]
+
+        table.add_row(
+            f"[{style}]{check.status}[/{style}]",
+            check.category,
+            check.name,
+            check.message,
+            check.hint or "",
         )
 
     console.print(table)

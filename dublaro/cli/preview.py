@@ -33,6 +33,7 @@ class SpeakerVoicePreview:
     piper_model_path: Path | None
     piper_config_path: Path | None
     piper_speaker: int | None
+    piper_executable: str
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,7 @@ def preview_speaker_voice(
                 fallback_tts.piper_config_path, base_dir
             ),
             piper_speaker=fallback_tts.piper_speaker,
+            piper_executable=fallback_tts.piper_executable or "piper",
         )
 
     return SpeakerVoicePreview(
@@ -246,6 +248,9 @@ def preview_speaker_voice(
             voice_config.piper_speaker
             if voice_config.piper_speaker is not None
             else fallback_tts.piper_speaker
+        ),
+        piper_executable=(
+            voice_config.piper_executable or fallback_tts.piper_executable or "piper"
         ),
     )
 
