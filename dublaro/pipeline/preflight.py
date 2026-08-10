@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from dublaro.adapters.text_adapter import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_URL,
+    check_ollama_model_available,
+)
+
 PreflightSeverity = Literal["error", "warning"]
 
 
@@ -58,6 +65,10 @@ def validate_dub_preflight(
     source_language: str | None,
     target_language: str,
     install_translation_package: bool,
+    text_adapter_backend: str = "rules",
+    ollama_model: str = DEFAULT_OLLAMA_MODEL,
+    ollama_url: str = DEFAULT_OLLAMA_URL,
+    ollama_timeout_seconds: float = DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS,
     tts_backend: str,
     piper_model_path: str | Path | None = None,
     piper_config_path: str | Path | None = None,
@@ -131,6 +142,14 @@ def validate_dub_preflight(
         source_language=source_language,
         target_language=target_language,
         auto_install=install_translation_package,
+    )
+
+    _check_ollama(
+        issues,
+        text_adapter_backend=text_adapter_backend,
+        ollama_model=ollama_model,
+        ollama_url=ollama_url,
+        ollama_timeout_seconds=ollama_timeout_seconds,
     )
 
     return DubPreflightReport(tuple(issues))
@@ -370,6 +389,46 @@ def _load_argos_translate_module(
             'Install it with: pip install -e ".[translation]"',
         )
         return None
+
+
+def _check_ollama(
+    issues: list[PreflightIssue],
+    *,
+    text_adapter_backend: str,
+    ollama_model: str,
+    ollama_url: str,
+    ollama_timeout_seconds: float,
+) -> None:
+    if text_adapter_backend != "ollama":
+        return
+
+    timeout_seconds = min(
+        ollama_timeout_seconds,
+        DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS,
+    )
+
+    try:
+        model_available = check_ollama_model_available(
+            model=ollama_model,
+            url=ollama_url,
+            timeout_seconds=timeout_seconds,
+        )
+    except ValueError as error:
+        _add_error(
+            issues,
+            "ollama_unavailable",
+            f"Ollama is not available: {error}",
+            "Start Ollama or pass --ollama-url with the correct server URL.",
+        )
+        return
+
+    if not model_available:
+        _add_error(
+            issues,
+            "ollama_model_missing",
+            f"Ollama model is not available: {ollama_model}",
+            f"Run: ollama pull {ollama_model}",
+        )
 
 
 def _add_error(

@@ -61,6 +61,10 @@ class TextAdapterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     backend: str | None = None
+    ollama_model: str | None = None
+    ollama_url: str | None = None
+    ollama_timeout_seconds: float | None = Field(gt=0, default=None)
+    ollama_temperature: float | None = Field(ge=0, le=2, default=None)
 
 
 class TtsConfig(BaseModel):

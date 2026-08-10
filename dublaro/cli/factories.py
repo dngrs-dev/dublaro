@@ -9,7 +9,12 @@ from dublaro.adapters.diarization import (
     PyannoteDiarizationAdapter,
 )
 from dublaro.adapters.text_adapter import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_TEMPERATURE,
+    DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_URL,
     FakeTextAdapter,
+    OllamaTextAdapter,
     RuleBasedTextAdapter,
     TextAdapter,
 )
@@ -81,14 +86,40 @@ def create_translation_adapter(
     raise typer.BadParameter("Translation backend must be 'fake' or 'argos'.")
 
 
-def create_text_adapter(backend: str) -> TextAdapter:
+def create_text_adapter(
+    backend: str,
+    *,
+    ollama_model: str | None = None,
+    ollama_url: str | None = None,
+    ollama_timeout_seconds: float | None = None,
+    ollama_temperature: float | None = None,
+) -> TextAdapter:
     if backend == "fake":
         return FakeTextAdapter()
 
     if backend == "rules":
         return RuleBasedTextAdapter()
 
-    raise typer.BadParameter("Text adapter must be 'fake' or 'rules'.")
+    if backend == "ollama":
+        try:
+            return OllamaTextAdapter(
+                model=ollama_model or DEFAULT_OLLAMA_MODEL,
+                url=ollama_url or DEFAULT_OLLAMA_URL,
+                timeout_seconds=(
+                    ollama_timeout_seconds
+                    if ollama_timeout_seconds is not None
+                    else DEFAULT_OLLAMA_TIMEOUT_SECONDS
+                ),
+                temperature=(
+                    ollama_temperature
+                    if ollama_temperature is not None
+                    else DEFAULT_OLLAMA_TEMPERATURE
+                ),
+            )
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from error
+
+    raise typer.BadParameter("Text adapter must be 'fake', 'rules', or 'ollama'.")
 
 
 def create_tts_adapter(

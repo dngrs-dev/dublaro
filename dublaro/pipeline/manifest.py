@@ -23,6 +23,10 @@ _ADAPTER_SETTING_NAMES = (
     "executable",
     "speaker",
     "model_sample_rate",
+    "model",
+    "url",
+    "timeout_seconds",
+    "temperature",
 )
 
 

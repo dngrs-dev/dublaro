@@ -42,6 +42,10 @@ class DubCommandOverrides:
     max_translation_group_duration_seconds: float | None = None
     max_translation_sentence_group_duration_seconds: float | None = None
     text_adapter_backend: str | None = None
+    ollama_model: str | None = None
+    ollama_url: str | None = None
+    ollama_timeout_seconds: float | None = None
+    ollama_temperature: float | None = None
     tts_backend: str | None = None
     piper_model_path: Path | None = None
     piper_config_path: Path | None = None
@@ -102,6 +106,10 @@ class DubCommandOverrides:
                 self.max_translation_sentence_group_duration_seconds
             ),
             text_adapter_backend=self.text_adapter_backend,
+            ollama_model=self.ollama_model,
+            ollama_url=self.ollama_url,
+            ollama_timeout_seconds=self.ollama_timeout_seconds,
+            ollama_temperature=self.ollama_temperature,
             tts_backend=self.tts_backend,
             piper_model_path=self.piper_model_path,
             piper_config_path=self.piper_config_path,

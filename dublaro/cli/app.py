@@ -708,9 +708,37 @@ def adapt_text(
         str,
         typer.Option(
             "--text-adapter",
-            help="Text adaptation backend: fake or rules.",
+            help="Text adaptation backend: fake, rules, or ollama.",
         ),
     ] = "rules",
+    ollama_model: Annotated[
+        str | None,
+        typer.Option(
+            "--ollama-model",
+            help="Ollama model used when --text-adapter ollama.",
+        ),
+    ] = None,
+    ollama_url: Annotated[
+        str | None,
+        typer.Option(
+            "--ollama-url",
+            help="Ollama server URL used when --text-adapter ollama.",
+        ),
+    ] = None,
+    ollama_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--ollama-timeout",
+            help="Ollama request timeout in seconds.",
+        ),
+    ] = None,
+    ollama_temperature: Annotated[
+        float | None,
+        typer.Option(
+            "--ollama-temperature",
+            help="Ollama generation temperature.",
+        ),
+    ] = None,
     max_chars_per_second: Annotated[
         float,
         typer.Option(
@@ -727,10 +755,16 @@ def adapt_text(
     ] = True,
 ) -> None:
     """Adapt translated transcript text for dubbing."""
-    adapter = create_text_adapter(text_adapter_backend)
     adapted_output = output_path or default_adapted_transcript_path(transcript_path)
 
     try:
+        adapter = create_text_adapter(
+            text_adapter_backend,
+            ollama_model=ollama_model,
+            ollama_url=ollama_url,
+            ollama_timeout_seconds=ollama_timeout_seconds,
+            ollama_temperature=ollama_temperature,
+        )
         transcript = load_transcript(transcript_path)
         adapted = adapt_transcript_text(
             transcript,
@@ -741,7 +775,7 @@ def adapt_text(
             preserve_meaning=preserve_meaning,
         )
         saved_path = save_transcript(adapted, adapted_output)
-    except (FileNotFoundError, ValueError) as error:
+    except (FileNotFoundError, ValueError, typer.BadParameter) as error:
         console.print(f"[red]error:[/red] {error}")
         raise typer.Exit(code=1) from error
 
@@ -1364,6 +1398,34 @@ def dub(
             help="Text adaptation backend: fake or rules.",
         ),
     ] = None,
+    ollama_model: Annotated[
+        str | None,
+        typer.Option(
+            "--ollama-model",
+            help="Ollama model used when --text-adapter ollama.",
+        ),
+    ] = None,
+    ollama_url: Annotated[
+        str | None,
+        typer.Option(
+            "--ollama-url",
+            help="Ollama server URL used when --text-adapter ollama.",
+        ),
+    ] = None,
+    ollama_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--ollama-timeout",
+            help="Ollama request timeout in seconds.",
+        ),
+    ] = None,
+    ollama_temperature: Annotated[
+        float | None,
+        typer.Option(
+            "--ollama-temperature",
+            help="Ollama generation temperature.",
+        ),
+    ] = None,
     tts_backend: Annotated[
         str | None,
         typer.Option(
@@ -1698,6 +1760,10 @@ def dub(
                     max_translation_sentence_group_duration_seconds
                 ),
                 text_adapter_backend=text_adapter_backend,
+                ollama_model=ollama_model,
+                ollama_url=ollama_url,
+                ollama_timeout_seconds=ollama_timeout_seconds,
+                ollama_temperature=ollama_temperature,
                 tts_backend=tts_backend,
                 piper_model_path=piper_model_path,
                 piper_config_path=piper_config_path,

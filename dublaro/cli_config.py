@@ -3,6 +3,12 @@ from pathlib import Path
 from typing import TypeVar
 
 from dublaro.adapters.diarization import DEFAULT_PYANNOTE_MODEL_ID
+from dublaro.adapters.text_adapter import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_TEMPERATURE,
+    DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_URL,
+)
 from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
 from dublaro.config import LoadedConfig, VoiceConfig, resolve_config_path
 from dublaro.pipeline.export import (
@@ -44,6 +50,10 @@ class DubCliOverrides:
     max_translation_group_duration_seconds: float | None = None
     max_translation_sentence_group_duration_seconds: float | None = None
     text_adapter_backend: str | None = None
+    ollama_model: str | None = None
+    ollama_url: str | None = None
+    ollama_timeout_seconds: float | None = None
+    ollama_temperature: float | None = None
     tts_backend: str | None = None
     piper_model_path: Path | None = None
     piper_config_path: Path | None = None
@@ -111,6 +121,10 @@ class ResolvedDubSettings:
     max_translation_group_duration_seconds: float
     max_translation_sentence_group_duration_seconds: float
     text_adapter_backend: str
+    ollama_model: str
+    ollama_url: str
+    ollama_timeout_seconds: float
+    ollama_temperature: float
     tts_backend: str
     piper_model_path: Path | None
     piper_config_path: Path | None
@@ -499,6 +513,26 @@ def resolve_dub_settings(
             overrides.text_adapter_backend,
             config.text_adapter.backend,
             "rules",
+        ),
+        ollama_model=_select(
+            overrides.ollama_model,
+            config.text_adapter.ollama_model,
+            DEFAULT_OLLAMA_MODEL,
+        ),
+        ollama_url=_select(
+            overrides.ollama_url,
+            config.text_adapter.ollama_url,
+            DEFAULT_OLLAMA_URL,
+        ),
+        ollama_timeout_seconds=_select(
+            overrides.ollama_timeout_seconds,
+            config.text_adapter.ollama_timeout_seconds,
+            DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        ),
+        ollama_temperature=_select(
+            overrides.ollama_temperature,
+            config.text_adapter.ollama_temperature,
+            DEFAULT_OLLAMA_TEMPERATURE,
         ),
         tts_backend=tts_backend,
         piper_model_path=piper_model_path,
