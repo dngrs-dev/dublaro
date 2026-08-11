@@ -1580,6 +1580,27 @@ def dub(
             help="Piper speaker id for multi-speaker voices.",
         ),
     ] = None,
+    repair_timing_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--repair-timing/--no-repair-timing",
+            help="Rewrite and resynthesize overlong segments before speech/video fitting.",
+        ),
+    ] = None,
+    max_timing_repair_attempts: Annotated[
+        int | None,
+        typer.Option(
+            "--timing-repair-attempts",
+            help="Maximum rewrite attempts for each overlong segment.",
+        ),
+    ] = None,
+    timing_repair_target_speedup: Annotated[
+        float | None,
+        typer.Option(
+            "--timing-repair-target-speedup",
+            help="Repair text when generated speech needs more than this speedup.",
+        ),
+    ] = None,
     fit_speech_enabled: Annotated[
         bool | None,
         typer.Option(
@@ -1769,6 +1790,9 @@ def dub(
                 piper_config_path=piper_config_path,
                 piper_executable=piper_executable,
                 piper_speaker=piper_speaker,
+                repair_timing_enabled=repair_timing_enabled,
+                max_timing_repair_attempts=max_timing_repair_attempts,
+                timing_repair_target_speedup=timing_repair_target_speedup,
                 fit_speech_enabled=fit_speech_enabled,
                 max_speech_speedup=max_speech_speedup,
                 min_speech_overrun_seconds=min_speech_overrun_seconds,

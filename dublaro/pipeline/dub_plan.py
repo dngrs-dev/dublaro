@@ -27,6 +27,9 @@ class DubOptions:
     target_language: str
     asr_sample_rate: int = 16_000
     speech_sample_rate: int = 24_000
+    repair_timing: bool = False
+    max_timing_repair_attempts: int = 2
+    timing_repair_target_speedup: float = 1.15
     fit_speech: bool = False
     max_speech_speedup: float = 1.35
     min_speech_overrun_seconds: float = 0.05
@@ -56,6 +59,17 @@ class DubOptions:
     overwrite: bool = False
 
     def __post_init__(self) -> None:
+        if self.max_timing_repair_attempts < 1:
+            raise ValueError("max_timing_repair_attempts must be >= 1")
+
+        if self.timing_repair_target_speedup < 1.0:
+            raise ValueError("timing_repair_target_speedup must be >= 1.0")
+
+        if self.timing_repair_target_speedup > self.max_speech_speedup:
+            raise ValueError(
+                "timing_repair_target_speedup cannot be greater than max_speech_speedup"
+            )
+
         if self.manifest_output_path is not None and not self.write_manifest:
             raise ValueError(
                 "manifest_output_path cannot be used when write_manifest is False."
@@ -77,6 +91,8 @@ class DubArtifactPaths:
     synthesized_transcript_path: Path
     diarized_transcript_path: Path
     speech_dir: Path
+    timing_repaired_transcript_path: Path
+    timing_repaired_speech_dir: Path
     speech_track_path: Path
     fitted_transcript_path: Path
     fitted_speech_dir: Path
@@ -133,6 +149,14 @@ class DubPaths:
             diarized_transcript_path=self.workspace_dir
             / f"{stem}.{source_label}.diarized.json",
             speech_dir=self.workspace_dir / f"{stem}.{options.target_language}.speech",
+            timing_repaired_transcript_path=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.timing-repaired.json"
+            ),
+            timing_repaired_speech_dir=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.timing-repaired-speech"
+            ),
             speech_track_path=self.workspace_dir / f"{timing_stem}.speech-track.wav",
             fitted_transcript_path=(
                 self.workspace_dir / f"{stem}.{options.target_language}.fitted.json"

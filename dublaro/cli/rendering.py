@@ -129,6 +129,11 @@ def _format_workspace_artifact_path(workspace_dir: Path, path: Path) -> str:
         return str(path)
 
 
+def _optional_artifact_path(artifacts: object, name: str) -> Path | None:
+    value = getattr(artifacts, name, None)
+    return value if isinstance(value, Path) else None
+
+
 def print_dub_progress(
     step: DubbingProgressStep,
     status: DubbingProgressStatus,
@@ -150,6 +155,16 @@ def print_dub_progress(
 def print_dub_artifacts(artifacts: DubbingArtifacts) -> None:
     console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
     console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
+
+    timing_repaired_transcript_path = _optional_artifact_path(
+        artifacts,
+        "timing_repaired_transcript_path",
+    )
+    if timing_repaired_transcript_path is not None:
+        console.print(
+            "[green]Timing-repaired transcript:[/green] "
+            f"{timing_repaired_transcript_path}"
+        )
 
     if artifacts.fitted_transcript_path is not None:
         console.print(

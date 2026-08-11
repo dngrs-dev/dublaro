@@ -3,7 +3,10 @@ from collections.abc import Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from dublaro.adapters.text_adapter.base import TextAdaptationOptions
+from dublaro.adapters.text_adapter.base import (
+    TextAdaptationOptions,
+    TextTimingRepairOptions,
+)
 from dublaro.schemas import Segment
 
 DEFAULT_OLLAMA_MODEL = "llama3.1"
@@ -52,9 +55,41 @@ class OllamaTextAdapter:
         if not translated_text:
             return ""
 
+        adapted_text = self._generate_adapted_text(
+            _build_prompt(segment, options, translated_text)
+        )
+        cleaned = _clean_llm_output(adapted_text)
+
+        return cleaned or translated_text
+
+    def repair_segment_timing(
+        self,
+        segment: Segment,
+        options: TextTimingRepairOptions,
+    ) -> str:
+        current_text = _normalize_spacing(
+            segment.adapted_text or segment.translated_text or segment.source_text
+        )
+        if not current_text:
+            return ""
+
+        translated_text = _normalize_spacing(segment.translated_text)
+        repaired_text = self._generate_adapted_text(
+            _build_timing_repair_prompt(
+                segment,
+                options,
+                current_text=current_text,
+                translated_text=translated_text,
+            )
+        )
+        cleaned = _clean_llm_output(repaired_text)
+
+        return cleaned or current_text
+
+    def _generate_adapted_text(self, prompt: str) -> str:
         payload: dict[str, object] = {
             "model": self.model,
-            "prompt": _build_prompt(segment, options, translated_text),
+            "prompt": prompt,
             "stream": False,
             "options": {"temperature": self.temperature},
         }
@@ -65,8 +100,7 @@ class OllamaTextAdapter:
         if not isinstance(adapted_text, str):
             raise ValueError("Ollama response did not include adapted text.")
 
-        cleaned = _clean_llm_output(adapted_text)
-        return cleaned or translated_text
+        return adapted_text
 
     def available_models(self) -> tuple[str, ...]:
         response = self._request_json("/api/tags", method="GET")
@@ -179,6 +213,50 @@ Translated text:
 {translated_text}
 
 Adapted text:"""
+
+
+def _build_timing_repair_prompt(
+    segment: Segment,
+    options: TextTimingRepairOptions,
+    *,
+    current_text: str,
+    translated_text: str,
+) -> str:
+    source_text = _normalize_spacing(segment.source_text)
+    source_language = options.source_language or segment.source_language or "unknown"
+    target_language = options.target_language or segment.target_language or "unknown"
+
+    return f"""You repair dubbing text after TTS generated audio that is too long.
+
+Goal:
+- Rewrite the current {target_language} text so generated speech becomes shorter.
+- Avoid video slowdown.
+- Return only the repaired {target_language} text.
+
+Hard rules:
+- Preserve the core meaning, questions, names, and numbers.
+- Make the text shorter and easier to speak.
+- Do not add new meaning.
+- Do not add explanations, labels, quotes, or markdown.
+- If possible, keep it natural enough for dubbing.
+
+Source language: {source_language}
+Target language: {target_language}
+Attempt: {options.attempt} of {options.max_attempts}
+Segment duration: {options.target_duration_seconds:.2f} seconds
+Current generated audio duration: {options.current_audio_duration_seconds:.2f} seconds
+Target maximum audio duration: {options.max_audio_duration_seconds:.2f} seconds
+
+Original source text:
+{source_text}
+
+Translated text:
+{translated_text}
+
+Current spoken text:
+{current_text}
+
+Shorter repaired spoken text:"""
 
 
 def _character_budget(

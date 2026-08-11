@@ -56,6 +56,15 @@ def validate_resolved_dub_settings(
     if settings.resume and settings.overwrite:
         raise ValueError("--resume cannot be used with --overwrite.")
 
+    if settings.repair_timing and settings.text_adapter_backend != "ollama":
+        raise ValueError("--repair-timing currently requires --text-adapter ollama.")
+
+    if settings.timing_repair_target_speedup > settings.max_speech_speedup:
+        raise ValueError(
+            "--timing-repair-target-speedup cannot be greater than "
+            "--max-speech-speedup."
+        )
+
     return parsed_srt_text_mode, parsed_subtitle_embed
 
 
@@ -151,6 +160,9 @@ def run_resolved_dub(
         ),
         asr_sample_rate=settings.asr_sample_rate,
         speech_sample_rate=settings.speech_sample_rate,
+        repair_timing=settings.repair_timing,
+        max_timing_repair_attempts=settings.max_timing_repair_attempts,
+        timing_repair_target_speedup=settings.timing_repair_target_speedup,
         fit_speech=settings.fit_speech,
         max_speech_speedup=settings.max_speech_speedup,
         min_speech_overrun_seconds=settings.min_speech_overrun_seconds,

@@ -1,6 +1,11 @@
 """Text adaptation adapter interfaces."""
 
-from dublaro.adapters.text_adapter.base import TextAdaptationOptions, TextAdapter
+from dublaro.adapters.text_adapter.base import (
+    TextAdaptationOptions,
+    TextAdapter,
+    TextTimingRepairOptions,
+    TimingRepairTextAdapter,
+)
 from dublaro.adapters.text_adapter.fake import FakeTextAdapter
 from dublaro.adapters.text_adapter.ollama import (
     DEFAULT_OLLAMA_MODEL,
@@ -24,5 +29,7 @@ __all__ = [
     "RuleBasedTextAdapter",
     "TextAdaptationOptions",
     "TextAdapter",
+    "TextTimingRepairOptions",
+    "TimingRepairTextAdapter",
     "check_ollama_model_available",
 ]

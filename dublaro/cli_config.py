@@ -59,6 +59,9 @@ class DubCliOverrides:
     piper_config_path: Path | None = None
     piper_executable: str | None = None
     piper_speaker: int | None = None
+    repair_timing: bool | None = None
+    max_timing_repair_attempts: int | None = None
+    timing_repair_target_speedup: float | None = None
     fit_speech: bool | None = None
     max_speech_speedup: float | None = None
     min_speech_overrun_seconds: float | None = None
@@ -131,6 +134,9 @@ class ResolvedDubSettings:
     piper_executable: str
     piper_speaker: int | None
     voice_profiles: dict[str, ResolvedVoiceProfileSettings]
+    repair_timing: bool
+    max_timing_repair_attempts: int
+    timing_repair_target_speedup: float
     fit_speech: bool
     max_speech_speedup: float
     min_speech_overrun_seconds: float
@@ -540,6 +546,21 @@ def resolve_dub_settings(
         piper_executable=piper_executable,
         piper_speaker=piper_speaker,
         voice_profiles=voice_profiles,
+        repair_timing=_select(
+            overrides.repair_timing,
+            config.timing_repair.enabled,
+            False,
+        ),
+        max_timing_repair_attempts=_select(
+            overrides.max_timing_repair_attempts,
+            config.timing_repair.max_attempts,
+            2,
+        ),
+        timing_repair_target_speedup=_select(
+            overrides.timing_repair_target_speedup,
+            config.timing_repair.target_speedup,
+            1.15,
+        ),
         fit_speech=_select(overrides.fit_speech, config.fit_speech.enabled, False),
         max_speech_speedup=_select(
             overrides.max_speech_speedup,

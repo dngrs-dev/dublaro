@@ -38,6 +38,7 @@ from dublaro.pipeline.resume import (
 )
 from dublaro.pipeline.subtitles import save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
+from dublaro.pipeline.timing_repair import repair_overlong_speech_segments
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
 from dublaro.schemas import Transcript
@@ -49,6 +50,7 @@ DubbingProgressStep = Literal[
     "translate",
     "adapt_text",
     "synthesize",
+    "repair_timing",
     "fit_speech",
     "fit_video",
     "align_speech",
@@ -83,6 +85,13 @@ class SpeechTimingResult:
 
 
 @dataclass(frozen=True)
+class TimingRepairResult:
+    transcript: Transcript
+    timing_repaired_transcript_path: Path | None = None
+    timing_repaired_speech_dir: Path | None = None
+
+
+@dataclass(frozen=True)
 class VideoFitResult:
     transcript: Transcript
     video_path: Path
@@ -114,6 +123,8 @@ class ManifestInputs:
     translated_transcript_path: Path
     adapted_transcript_path: Path
     synthesized_transcript_path: Path
+    timing_repaired_transcript_path: Path | None
+    timing_repaired_speech_dir: Path | None
     speech_dir: Path
     speech_track_path: Path
     dubbed_video_path: Path
@@ -382,6 +393,64 @@ def _synthesize_speech(
         )
         save_transcript(synthesized_transcript, synthesized_transcript_path)
         return synthesized_transcript
+
+
+def _repair_speech_timing(
+    context: DubRunContext,
+    synthesized_transcript: Transcript,
+) -> TimingRepairResult:
+    if not context.options.repair_timing:
+        return TimingRepairResult(transcript=synthesized_transcript)
+
+    timing_repaired_transcript_path = (
+        context.artifact_paths.timing_repaired_transcript_path
+    )
+    timing_repaired_speech_dir = context.artifact_paths.timing_repaired_speech_dir
+
+    reusable_repaired_transcript = (
+        load_reusable_synthesized_transcript(timing_repaired_transcript_path)
+        if context.options.resume
+        else None
+    )
+
+    if reusable_repaired_transcript is not None:
+        _progress_skipped(
+            context.progress_callback,
+            "repair_timing",
+            f"Using existing timing-repaired transcript: "
+            f"{timing_repaired_transcript_path}.",
+        )
+        return TimingRepairResult(
+            transcript=reusable_repaired_transcript,
+            timing_repaired_transcript_path=timing_repaired_transcript_path,
+            timing_repaired_speech_dir=timing_repaired_speech_dir,
+        )
+
+    with _progress_stage(
+        context.progress_callback,
+        "repair_timing",
+        "Repairing overlong speech text.",
+    ):
+        repaired_transcript = repair_overlong_speech_segments(
+            synthesized_transcript,
+            text_adapter=context.adapters.text_adapter,
+            tts_adapter=context.adapters.tts,
+            output_dir=timing_repaired_speech_dir,
+            language=context.options.target_language,
+            sample_rate=context.options.speech_sample_rate,
+            speaker_voices=context.adapters.speaker_voices,
+            max_attempts=context.options.max_timing_repair_attempts,
+            target_speedup=context.options.timing_repair_target_speedup,
+            min_overrun_seconds=context.options.min_speech_overrun_seconds,
+            overwrite=context.options.overwrite,
+        )
+        save_transcript(repaired_transcript, timing_repaired_transcript_path)
+
+        return TimingRepairResult(
+            transcript=repaired_transcript,
+            timing_repaired_transcript_path=timing_repaired_transcript_path,
+            timing_repaired_speech_dir=timing_repaired_speech_dir,
+        )
 
 
 def _fit_speech_to_timing(
@@ -735,6 +804,9 @@ def _write_manifest(
                 diarization_min_speakers=run_options.diarization_min_speakers,
                 diarization_max_speakers=run_options.diarization_max_speakers,
                 speech_sample_rate=run_options.speech_sample_rate,
+                repair_timing=run_options.repair_timing,
+                max_timing_repair_attempts=run_options.max_timing_repair_attempts,
+                timing_repair_target_speedup=run_options.timing_repair_target_speedup,
                 fit_speech=run_options.fit_speech,
                 max_speech_speedup=run_options.max_speech_speedup,
                 min_speech_overrun_seconds=run_options.min_speech_overrun_seconds,
@@ -775,6 +847,16 @@ def _write_manifest(
                 translated_transcript_path=str(inputs.translated_transcript_path),
                 adapted_transcript_path=str(inputs.adapted_transcript_path),
                 synthesized_transcript_path=str(inputs.synthesized_transcript_path),
+                timing_repaired_transcript_path=(
+                    str(inputs.timing_repaired_transcript_path)
+                    if inputs.timing_repaired_transcript_path is not None
+                    else None
+                ),
+                timing_repaired_speech_dir=(
+                    str(inputs.timing_repaired_speech_dir)
+                    if inputs.timing_repaired_speech_dir is not None
+                    else None
+                ),
                 speech_dir=str(inputs.speech_dir),
                 speech_track_path=str(inputs.speech_track_path),
                 dubbed_video_path=str(inputs.dubbed_video_path),

@@ -51,6 +51,9 @@ class DubCommandOverrides:
     piper_config_path: Path | None = None
     piper_executable: str | None = None
     piper_speaker: int | None = None
+    repair_timing_enabled: bool | None = None
+    max_timing_repair_attempts: int | None = None
+    timing_repair_target_speedup: float | None = None
     fit_speech_enabled: bool | None = None
     max_speech_speedup: float | None = None
     min_speech_overrun_seconds: float | None = None
@@ -115,6 +118,9 @@ class DubCommandOverrides:
             piper_config_path=self.piper_config_path,
             piper_executable=self.piper_executable,
             piper_speaker=self.piper_speaker,
+            repair_timing=self.repair_timing_enabled,
+            max_timing_repair_attempts=self.max_timing_repair_attempts,
+            timing_repair_target_speedup=self.timing_repair_target_speedup,
             fit_speech=self.fit_speech_enabled,
             max_speech_speedup=self.max_speech_speedup,
             min_speech_overrun_seconds=self.min_speech_overrun_seconds,

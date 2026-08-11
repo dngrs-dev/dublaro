@@ -77,6 +77,14 @@ class TtsConfig(BaseModel):
     piper_speaker: int | None = None
 
 
+class TimingRepairConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    max_attempts: int | None = Field(ge=1, default=None)
+    target_speedup: float | None = Field(ge=1.0, default=None)
+
+
 class VoiceConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -154,6 +162,7 @@ class DubConfig(BaseModel):
     translation: TranslationConfig = TranslationConfig()
     text_adapter: TextAdapterConfig = TextAdapterConfig()
     tts: TtsConfig = TtsConfig()
+    timing_repair: TimingRepairConfig = TimingRepairConfig()
     fit_speech: FitSpeechConfig = FitSpeechConfig()
     fit_video: FitVideoConfig = FitVideoConfig()
     mix: MixConfig = MixConfig()

@@ -41,6 +41,8 @@ _MANIFEST_ARTIFACT_LABELS = {
     "translated_transcript_path": ("transcript", "translated transcript"),
     "adapted_transcript_path": ("transcript", "adapted transcript"),
     "synthesized_transcript_path": ("transcript", "synthesized transcript"),
+    "timing_repaired_transcript_path": ("transcript", "timing-repaired transcript"),
+    "timing_repaired_speech_dir": ("speech", "timing-repaired speech clips"),
     "speech_dir": ("speech", "speech clips"),
     "speech_track_path": ("audio", "speech track"),
     "dubbed_video_path": ("video", "dubbed video"),
@@ -124,6 +126,14 @@ def _workspace_artifact(path: Path) -> WorkspaceArtifact | None:
     name = path.name
 
     if path.is_dir():
+        if name.endswith(".timing-repaired-speech"):
+            return _build_artifact(
+                category="speech",
+                label="timing-repaired speech clips",
+                path=path,
+                source="workspace",
+            )
+
         if name.endswith(".fitted-speech"):
             return _build_artifact(
                 category="speech",
@@ -177,6 +187,14 @@ def _workspace_artifact(path: Path) -> WorkspaceArtifact | None:
         return _build_artifact(
             "transcript",
             "synthesized transcript",
+            path,
+            "workspace",
+        )
+
+    if name.endswith(".timing-repaired.json"):
+        return _build_artifact(
+            "transcript",
+            "timing-repaired transcript",
             path,
             "workspace",
         )

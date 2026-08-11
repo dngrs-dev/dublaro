@@ -68,6 +68,9 @@ class DubbingOptionsManifest(BaseModel):
     diarization_min_speakers: int | None = None
     diarization_max_speakers: int | None = None
     speech_sample_rate: int
+    repair_timing: bool
+    max_timing_repair_attempts: int
+    timing_repair_target_speedup: float
     resume: bool
     fit_speech: bool
     max_speech_speedup: float
@@ -99,6 +102,8 @@ class DubbingArtifactsManifest(BaseModel):
     translated_transcript_path: str
     adapted_transcript_path: str
     synthesized_transcript_path: str
+    timing_repaired_transcript_path: str | None = None
+    timing_repaired_speech_dir: str | None = None
     speech_dir: str
     speech_track_path: str
     dubbed_video_path: str

@@ -24,6 +24,7 @@ from dublaro.pipeline.dub_stages import (
     _fit_video_to_speech,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
+    _repair_speech_timing,
     _synthesize_speech,
     _transcribe_source_audio,
     _translate_source_transcript,
@@ -51,6 +52,8 @@ class DubbingArtifacts:
     adapted_transcript_path: Path
     synthesized_transcript_path: Path
     speech_dir: Path
+    timing_repaired_transcript_path: Path | None
+    timing_repaired_speech_dir: Path | None
     speech_track_path: Path
     dubbed_video_path: Path
     fitted_transcript_path: Path | None
@@ -83,6 +86,9 @@ def dub_video(
     diarization_max_speakers: int | None = None,
     asr_sample_rate: int = 16_000,
     speech_sample_rate: int = 24_000,
+    repair_timing: bool = False,
+    max_timing_repair_attempts: int = 2,
+    timing_repair_target_speedup: float = 1.15,
     fit_speech: bool = False,
     max_speech_speedup: float = 1.35,
     min_speech_overrun_seconds: float = 0.05,
@@ -122,6 +128,9 @@ def dub_video(
         diarization_min_speakers=diarization_min_speakers,
         diarization_max_speakers=diarization_max_speakers,
         speech_sample_rate=speech_sample_rate,
+        repair_timing=repair_timing,
+        max_timing_repair_attempts=max_timing_repair_attempts,
+        timing_repair_target_speedup=timing_repair_target_speedup,
         fit_speech=fit_speech,
         max_speech_speedup=max_speech_speedup,
         min_speech_overrun_seconds=min_speech_overrun_seconds,
@@ -187,6 +196,8 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     adapted_transcript_path = artifact_paths.adapted_transcript_path
     synthesized_transcript_path = artifact_paths.synthesized_transcript_path
     speech_dir = artifact_paths.speech_dir
+    timing_repaired_transcript_path = None
+    timing_repaired_speech_dir = None
     speech_track_path = artifact_paths.speech_track_path
 
     source_transcript = _transcribe_source_audio(context, extracted_audio_path)
@@ -202,7 +213,11 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     synthesized_transcript = _synthesize_speech(context, adapted_transcript)
 
-    speech_timing = _fit_speech_to_timing(context, synthesized_transcript)
+    timing_repair = _repair_speech_timing(context, synthesized_transcript)
+    timing_repaired_transcript_path = timing_repair.timing_repaired_transcript_path
+    timing_repaired_speech_dir = timing_repair.timing_repaired_speech_dir
+
+    speech_timing = _fit_speech_to_timing(context, timing_repair.transcript)
     speech_timeline_transcript = speech_timing.transcript
     fitted_transcript_path = speech_timing.fitted_transcript_path
     fitted_speech_dir = speech_timing.fitted_speech_dir
@@ -249,6 +264,8 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         translated_transcript_path=translated_transcript_path,
         adapted_transcript_path=adapted_transcript_path,
         synthesized_transcript_path=synthesized_transcript_path,
+        timing_repaired_transcript_path=timing_repaired_transcript_path,
+        timing_repaired_speech_dir=timing_repaired_speech_dir,
         speech_dir=speech_dir,
         speech_track_path=speech_track_path,
         dubbed_video_path=dubbed_video_path,
@@ -278,6 +295,8 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         adapted_transcript_path=adapted_transcript_path,
         synthesized_transcript_path=synthesized_transcript_path,
         speech_dir=speech_dir,
+        timing_repaired_transcript_path=timing_repaired_transcript_path,
+        timing_repaired_speech_dir=timing_repaired_speech_dir,
         speech_track_path=speech_track_path,
         dubbed_video_path=dubbed_video_path,
         fitted_transcript_path=fitted_transcript_path,
