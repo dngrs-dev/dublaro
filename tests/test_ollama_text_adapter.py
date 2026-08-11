@@ -1,7 +1,10 @@
 from collections.abc import Mapping
 
 import pytest
-from dublaro.adapters.text_adapter.base import TextAdaptationOptions
+from dublaro.adapters.text_adapter.base import (
+    TextAdaptationOptions,
+    TextTimingRepairOptions,
+)
 from dublaro.adapters.text_adapter.ollama import (
     OllamaTextAdapter,
     check_ollama_model_available,
@@ -89,3 +92,31 @@ def test_check_ollama_model_available_accepts_latest_tag(
         url="http://ollama.local:11434",
         timeout_seconds=1.0,
     )
+
+
+def test_ollama_text_adapter_strips_timing_repair_label() -> None:
+    adapter = RecordingOllamaTextAdapter(
+        {"response": "Repaired translated text to jest fajnie"}
+    )
+
+    result = adapter.repair_segment_timing(
+        Segment(
+            id="seg-1",
+            start=0.0,
+            end=1.0,
+            source_text="And that's cool.",
+            translated_text="I to jest super.",
+            adapted_text="To jest fajnie.",
+        ),
+        TextTimingRepairOptions(
+            source_language="en",
+            target_language="pl",
+            target_duration_seconds=1.0,
+            current_audio_duration_seconds=1.5,
+            max_audio_duration_seconds=1.15,
+            attempt=1,
+            max_attempts=2,
+        ),
+    )
+
+    assert result == "to jest fajnie"

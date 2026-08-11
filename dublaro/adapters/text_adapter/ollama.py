@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Mapping
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -14,6 +15,25 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 30.0
 DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS = 5.0
 DEFAULT_OLLAMA_TEMPERATURE = 0.2
+
+_LABEL_PREFIX_RE = re.compile(
+    r"^\s*"
+    r"(?:shorter repaired translated text|"
+    r"shorter repaired spoken text|"
+    r"shorter repaired text|"
+    r"repaired translated text|"
+    r"repaired spoken text|"
+    r"repaired text|"
+    r"translated text|"
+    r"spoken text|"
+    r"adapted text|"
+    r"repaired|"
+    r"adapted|"
+    r"output|"
+    r"result)"
+    r"\s*[:-]?\s+",
+    re.IGNORECASE,
+)
 
 
 class OllamaTextAdapter:
@@ -271,22 +291,34 @@ def _character_budget(
 
 def _clean_llm_output(text: str) -> str:
     cleaned = _normalize_spacing(text)
+    cleaned = _strip_wrapping_quotes(cleaned)
     cleaned = _strip_label(cleaned)
+    cleaned = _strip_wrapping_quotes(cleaned)
 
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
-        cleaned = cleaned[1:-1].strip()
-
-    return cleaned
+    return _normalize_spacing(cleaned)
 
 
 def _strip_label(text: str) -> str:
-    lowered = text.lower()
+    previous = text
 
-    for label in ("adapted text:", "adapted:", "output:", "result:"):
-        if lowered.startswith(label):
-            return text[len(label) :].strip()
+    while True:
+        stripped = _LABEL_PREFIX_RE.sub("", previous, count=1).strip()
+        if stripped == previous:
+            return stripped
 
-    return text
+        previous = stripped
+
+
+def _strip_wrapping_quotes(text: str) -> str:
+    stripped = text.strip()
+
+    if len(stripped) < 2:
+        return stripped
+
+    if stripped[0] == stripped[-1] and stripped[0] in {"'", '"'}:
+        return stripped[1:-1].strip()
+
+    return stripped
 
 
 def _normalize_spacing(text: str) -> str:

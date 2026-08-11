@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from contextlib import suppress
 from pathlib import Path
 
 from dublaro.adapters.text_adapter import (
@@ -91,7 +92,10 @@ def repair_overlong_speech_segments(
                 )
             )
 
-            if not repaired_text or repaired_text == best_text:
+            if not repaired_text or _same_spoken_text(repaired_text, best_text):
+                continue
+
+            if len(repaired_text) >= len(best_text):
                 continue
 
             attempts_made += 1
@@ -122,9 +126,14 @@ def repair_overlong_speech_segments(
             generated_audio_duration = _audio_duration(generated_audio_path)
 
             if generated_audio_duration < best_audio_duration:
+                if best_audio_path != current_audio_path:
+                    _delete_file(best_audio_path)
+
                 best_text = repaired_text
                 best_audio_path = generated_audio_path
                 best_audio_duration = generated_audio_duration
+            else:
+                _delete_file(generated_audio_path)
 
             if best_audio_duration - max_audio_duration <= min_overrun_seconds:
                 break
@@ -243,6 +252,19 @@ def _repair_status(*, improved: bool, fits: bool) -> str:
         return "improved"
 
     return "not_improved"
+
+
+def _same_spoken_text(left: str, right: str) -> bool:
+    return _comparison_text(left) == _comparison_text(right)
+
+
+def _comparison_text(text: str) -> str:
+    return _normalize_spacing(text).strip(".,!?;:").casefold()
+
+
+def _delete_file(path: str | Path) -> None:
+    with suppress(FileNotFoundError):
+        Path(path).unlink()
 
 
 def _normalize_spacing(text: str) -> str:
