@@ -1874,6 +1874,84 @@ def test_batch_command_runs_each_video(
     assert "Batch summary" in result.output
 
 
+def test_batch_command_passes_timing_repair_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    config_path = tmp_path / "dublaro.toml"
+
+    input_dir.mkdir()
+    video_path = input_dir / "lesson.mp4"
+    video_path.write_bytes(b"fake video")
+
+    config_path.write_text(
+        """
+[dub.text_adapter]
+backend = "ollama"
+ollama_model = "llama3.1"
+
+[dub.tts]
+backend = "fake"
+""",
+        encoding="utf-8",
+    )
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake dubbed video")
+
+        workspace_dir = kwargs["workspace_dir"]
+        assert isinstance(workspace_dir, Path)
+
+        return FakeArtifacts(output_path, workspace_dir)
+
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "batch",
+            str(input_dir),
+            "--config",
+            str(config_path),
+            "--to",
+            "pl",
+            "--output-dir",
+            str(output_dir),
+            "--repair-timing",
+            "--timing-repair-attempts",
+            "4",
+            "--timing-repair-target-speedup",
+            "1.2",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0]["repair_timing"] is True
+    assert calls[0]["max_timing_repair_attempts"] == 4
+    assert calls[0]["timing_repair_target_speedup"] == 1.2
+
+
 def test_batch_command_dry_run_does_not_call_dub(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

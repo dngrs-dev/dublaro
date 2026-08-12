@@ -1966,6 +1966,27 @@ def batch(
             help="Check tools and paths before each dubbing run.",
         ),
     ] = None,
+    repair_timing_enabled: Annotated[
+        bool | None,
+        typer.Option(
+            "--repair-timing/--no-repair-timing",
+            help="Rewrite and resynthesize overlong segments before speech/video fitting.",
+        ),
+    ] = None,
+    max_timing_repair_attempts: Annotated[
+        int | None,
+        typer.Option(
+            "--timing-repair-attempts",
+            help="Maximum rewrite attempts for each overlong segment.",
+        ),
+    ] = None,
+    timing_repair_target_speedup: Annotated[
+        float | None,
+        typer.Option(
+            "--timing-repair-target-speedup",
+            help="Repair text when generated speech needs more than this speedup.",
+        ),
+    ] = None,
     ffmpeg_executable: Annotated[
         str | None,
         typer.Option(
@@ -1995,6 +2016,9 @@ def batch(
             continue_on_error=continue_on_error,
             resume_enabled=resume_enabled,
             preflight_enabled=preflight_enabled,
+            repair_timing_enabled=repair_timing_enabled,
+            max_timing_repair_attempts=max_timing_repair_attempts,
+            timing_repair_target_speedup=timing_repair_target_speedup,
             ffmpeg_executable=ffmpeg_executable,
             overwrite=overwrite,
             on_batch_discovered=print_batch_discovered,
