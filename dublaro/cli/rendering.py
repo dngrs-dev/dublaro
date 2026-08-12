@@ -9,6 +9,7 @@ from dublaro.cli.doctor import DoctorReport
 from dublaro.cli.preview import (
     SpeakerPreview,
     TimingPreviewReport,
+    TimingRepairPreviewReport,
     TranslationUnitsPreview,
     VoiceSamplesPreview,
     format_optional_factor,
@@ -358,3 +359,75 @@ def print_timing_preview_report(report: TimingPreviewReport) -> None:
         )
 
     console.print(table)
+
+
+def print_timing_repair_preview_report(
+    report: TimingRepairPreviewReport,
+) -> None:
+    console.print(
+        "[green]Timing repair preview:[/green] "
+        f"{report.attempted_count} attempted from {report.total_segments} segments, "
+        f"{report.repaired_count} repaired, "
+        f"{report.improved_count} improved, "
+        f"{report.not_improved_count} not improved"
+    )
+
+    repair_mode = report.metadata.get("timing_repair")
+    repair_adapter = report.metadata.get("timing_repair_adapter")
+    if repair_mode or repair_adapter:
+        console.print(
+            "[green]Repair:[/green] "
+            f"{repair_mode or 'unknown'}"
+            f"{f' with {repair_adapter}' if repair_adapter else ''}"
+        )
+
+    if not report.rows:
+        console.print("[yellow]No timing repair metadata found.[/yellow]")
+        return
+
+    for row in report.rows:
+        style = {
+            "repaired": "green",
+            "improved": "yellow",
+            "not_improved": "red",
+            "not_attempted": "dim",
+        }.get(row.status, "white")
+
+        console.print(
+            f"[{style}]{row.segment_id}[/{style}] "
+            f"{row.status} | "
+            f"attempts={_format_repair_optional_int(row.attempts)} | "
+            f"audio={_format_repair_change(row.audio_duration_before_seconds, row.audio_duration_after_seconds, format_optional_seconds)} | "
+            f"speedup={_format_repair_change(row.required_speedup_before, row.required_speedup_after, format_optional_factor)} | "
+            f"reason={row.reason}"
+        )
+
+        details = [
+            f"window={row.start:.2f}-{row.end:.2f}s",
+            f"speaker={row.speaker or ''}",
+            f"target={format_optional_seconds(row.target_duration_seconds) or '-'}",
+            f"max={format_optional_seconds(row.max_audio_duration_seconds) or '-'}",
+        ]
+        console.print(f"  [dim]{' | '.join(details)}[/dim]")
+
+        if row.text:
+            console.print(Text(f"  {row.text}"))
+
+
+def _format_repair_optional_int(value: int | None) -> str:
+    if value is None:
+        return "-"
+    return str(value)
+
+
+def _format_repair_change(
+    before: float | None,
+    after: float | None,
+    formatter: object,
+) -> str:
+    if not callable(formatter):
+        raise TypeError("formatter must be callable")
+
+    before_text = formatter(before) or "-"
+    after_text = formatter(after) or "-"
+    return f"{before_text} -> {after_text}"

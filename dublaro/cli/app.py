@@ -30,6 +30,7 @@ from dublaro.cli.factories import (
 from dublaro.cli.preview import (
     build_speaker_preview,
     build_timing_preview_report,
+    build_timing_repair_preview_report,
     build_translation_units_preview,
     build_voice_samples_preview,
 )
@@ -45,6 +46,7 @@ from dublaro.cli.rendering import (
     print_preflight_report,
     print_speaker_preview,
     print_timing_preview_report,
+    print_timing_repair_preview_report,
     print_translation_units_preview,
     print_voice_samples_preview,
     print_workspace_inspection_report,
@@ -668,6 +670,39 @@ def preview_timing(
         raise typer.Exit(code=1) from error
 
     print_timing_preview_report(report)
+
+
+@app.command("preview-repairs")
+def preview_repairs(
+    transcript_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Input timing-repaired transcript JSON file.",
+        ),
+    ],
+    include_all: Annotated[
+        bool,
+        typer.Option(
+            "--all/--attempted-only",
+            help="Show every segment, not only segments attempted by timing repair.",
+        ),
+    ] = False,
+) -> None:
+    """Preview timing repair decisions from a repaired transcript."""
+    try:
+        report = build_timing_repair_preview_report(
+            transcript_path,
+            include_all=include_all,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        console.print(f"[red]error:[/red] {error}")
+        raise typer.Exit(code=1) from error
+
+    print_timing_repair_preview_report(report)
 
 
 @app.command("adapt-text")

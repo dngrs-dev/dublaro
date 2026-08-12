@@ -17,6 +17,7 @@ from dublaro.pipeline.timing import TimingPreview, preview_speech_timing
 from dublaro.pipeline.transcribe import load_transcript
 from dublaro.pipeline.units import SegmentGroup, group_segments_for_translation
 from dublaro.pipeline.voice_preview import VoiceSample, synthesize_voice_samples
+from dublaro.schemas import Segment
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,52 @@ class TimingPreviewReport:
     shown_previews: list[TimingPreview]
     attention_count: int
     video_fit_count: int
+
+
+@dataclass(frozen=True)
+class TimingRepairPreviewRow:
+    segment_id: str
+    start: float
+    end: float
+    speaker: str | None
+    status: str
+    attempts: int | None
+    target_duration_seconds: float | None
+    max_audio_duration_seconds: float | None
+    audio_duration_before_seconds: float | None
+    audio_duration_after_seconds: float | None
+    required_speedup_before: float | None
+    required_speedup_after: float | None
+    reason: str
+    text: str
+
+
+@dataclass(frozen=True)
+class TimingRepairPreviewReport:
+    transcript_path: Path
+    total_segments: int
+    rows: list[TimingRepairPreviewRow]
+    metadata: dict[str, str]
+
+    @property
+    def attempted_count(self) -> int:
+        return sum(row.status != "not_attempted" for row in self.rows)
+
+    @property
+    def repaired_count(self) -> int:
+        return sum(row.status == "repaired" for row in self.rows)
+
+    @property
+    def improved_count(self) -> int:
+        return sum(row.status == "improved" for row in self.rows)
+
+    @property
+    def not_improved_count(self) -> int:
+        return sum(row.status == "not_improved" for row in self.rows)
+
+    @property
+    def not_attempted_count(self) -> int:
+        return sum(row.status == "not_attempted" for row in self.rows)
 
 
 def build_translation_units_preview(
@@ -208,6 +255,94 @@ def build_timing_preview_report(
     )
 
 
+def build_timing_repair_preview_report(
+    transcript_path: Path,
+    *,
+    include_all: bool,
+) -> TimingRepairPreviewReport:
+    transcript = load_transcript(transcript_path)
+    rows: list[TimingRepairPreviewRow] = []
+
+    for segment in transcript.sorted_segments():
+        metadata = segment.metadata
+        status = metadata.get("timing_repair_status")
+
+        if status is None:
+            if not include_all:
+                continue
+
+            rows.append(
+                TimingRepairPreviewRow(
+                    segment_id=segment.id,
+                    start=segment.start,
+                    end=segment.end,
+                    speaker=segment.speaker,
+                    status="not_attempted",
+                    attempts=None,
+                    target_duration_seconds=segment.duration,
+                    max_audio_duration_seconds=None,
+                    audio_duration_before_seconds=None,
+                    audio_duration_after_seconds=None,
+                    required_speedup_before=None,
+                    required_speedup_after=None,
+                    reason="not-attempted",
+                    text=_timing_repair_segment_text(segment),
+                )
+            )
+            continue
+
+        attempts = _metadata_int(metadata, "timing_repair_attempts")
+        before = _metadata_float(
+            metadata,
+            "timing_repair_original_audio_duration_seconds",
+        )
+        after = _metadata_float(metadata, "timing_repair_best_audio_duration_seconds")
+        max_audio = _metadata_float(
+            metadata, "timing_repair_max_audio_duration_seconds"
+        )
+
+        rows.append(
+            TimingRepairPreviewRow(
+                segment_id=segment.id,
+                start=segment.start,
+                end=segment.end,
+                speaker=segment.speaker,
+                status=status,
+                attempts=attempts,
+                target_duration_seconds=_metadata_float(
+                    metadata,
+                    "timing_repair_target_duration_seconds",
+                ),
+                max_audio_duration_seconds=max_audio,
+                audio_duration_before_seconds=before,
+                audio_duration_after_seconds=after,
+                required_speedup_before=_metadata_float(
+                    metadata,
+                    "timing_repair_required_speedup_before",
+                ),
+                required_speedup_after=_metadata_float(
+                    metadata,
+                    "timing_repair_required_speedup_after",
+                ),
+                reason=_timing_repair_reason(
+                    status=status,
+                    attempts=attempts,
+                    before=before,
+                    after=after,
+                    max_audio=max_audio,
+                ),
+                text=_timing_repair_segment_text(segment),
+            )
+        )
+
+    return TimingRepairPreviewReport(
+        transcript_path=transcript_path,
+        total_segments=len(transcript.segments),
+        rows=rows,
+        metadata=dict(transcript.metadata),
+    )
+
+
 def preview_speaker_voice(
     speaker_id: str,
     loaded_config: LoadedConfig,
@@ -294,3 +429,60 @@ def format_optional_factor(value: float | None) -> str:
 
 def timing_preview_needs_attention(preview: TimingPreview) -> bool:
     return preview.status != "ok"
+
+
+def _metadata_float(metadata: dict[str, str], key: str) -> float | None:
+    value = metadata.get(key)
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _metadata_int(metadata: dict[str, str], key: str) -> int | None:
+    value = metadata.get(key)
+    if value is None:
+        return None
+
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _timing_repair_reason(
+    *,
+    status: str,
+    attempts: int | None,
+    before: float | None,
+    after: float | None,
+    max_audio: float | None,
+) -> str:
+    if status == "repaired":
+        return "fits-target"
+
+    if status == "improved":
+        return "shorter-but-over-target"
+
+    if status == "not_improved":
+        if attempts == 0:
+            return "no-shorter-text"
+
+        if before is not None and after is not None and after >= before:
+            return "candidate-audio-not-shorter"
+
+        if after is not None and max_audio is not None and after > max_audio:
+            return "still-over-target"
+
+        return "not-improved"
+
+    return status
+
+
+def _timing_repair_segment_text(segment: Segment) -> str:
+    return " ".join(
+        (segment.adapted_text or segment.translated_text or segment.source_text).split()
+    )
