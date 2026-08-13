@@ -1,7 +1,11 @@
 from array import array
 from pathlib import Path
 
-from dublaro.adapters.text_adapter import TextAdaptationOptions, TextTimingRepairOptions
+from dublaro.adapters.text_adapter import (
+    TextAdaptationOptions,
+    TextAdapterResult,
+    TextTimingRepairOptions,
+)
 from dublaro.adapters.tts import SpeechSynthesisOptions
 from dublaro.audio.wav import write_mono_pcm16_wav
 from dublaro.pipeline.timing_repair import repair_overlong_speech_segments
@@ -28,6 +32,19 @@ class RepairingTextAdapter:
     ) -> str:
         self.calls.append(options)
         return "Short text."
+
+
+class ReasonedRepairingTextAdapter(RepairingTextAdapter):
+    def repair_segment_timing_result(
+        self,
+        segment: Segment,
+        options: TextTimingRepairOptions,
+    ) -> TextAdapterResult:
+        self.calls.append(options)
+        return TextAdapterResult(
+            text="Short text.",
+            reason="Removed optional words.",
+        )
 
 
 class LengthBasedTtsAdapter:
@@ -62,7 +79,7 @@ def test_repair_overlong_speech_segments_rewrites_and_resynthesizes(
         sample_rate=8_000,
     )
 
-    text_adapter = RepairingTextAdapter()
+    text_adapter = ReasonedRepairingTextAdapter()
 
     result = repair_overlong_speech_segments(
         Transcript(
@@ -103,6 +120,7 @@ def test_repair_overlong_speech_segments_rewrites_and_resynthesizes(
     assert segment.metadata["timing_repair_required_speedup_after"] == "1"
     assert result.metadata["timing_repair_attempted_segments"] == "1"
     assert result.metadata["timing_repair_repaired_segments"] == "1"
+    assert segment.metadata["timing_repair_model_reason"] == "Removed optional words."
 
 
 def test_repair_overlong_speech_segments_skips_segments_inside_target(

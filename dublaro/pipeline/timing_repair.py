@@ -6,6 +6,7 @@ from dublaro.adapters.text_adapter import (
     TextAdapter,
     TextTimingRepairOptions,
     TimingRepairTextAdapter,
+    repair_segment_timing_with_result,
 )
 from dublaro.adapters.tts import SpeechSynthesisOptions, TtsAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav
@@ -71,26 +72,33 @@ def repair_overlong_speech_segments(
         best_text = _spoken_text(segment)
         best_audio_path = current_audio_path
         best_audio_duration = current_audio_duration
+        best_repair_reason: str | None = None
+        last_repair_reason: str | None = None
 
         for attempt in range(1, max_attempts + 1):
             repair_input = segment.model_copy(deep=True)
             repair_input.adapted_text = best_text
             repair_input.generated_audio_path = str(best_audio_path)
 
-            repaired_text = _normalize_spacing(
-                text_adapter.repair_segment_timing(
-                    repair_input,
-                    TextTimingRepairOptions(
-                        source_language=transcript.source_language,
-                        target_language=transcript.target_language or language,
-                        target_duration_seconds=segment.duration,
-                        current_audio_duration_seconds=best_audio_duration,
-                        max_audio_duration_seconds=max_audio_duration,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                    ),
-                )
+            repair_options = TextTimingRepairOptions(
+                source_language=transcript.source_language,
+                target_language=transcript.target_language or language,
+                target_duration_seconds=segment.duration,
+                current_audio_duration_seconds=best_audio_duration,
+                max_audio_duration_seconds=max_audio_duration,
+                attempt=attempt,
+                max_attempts=max_attempts,
             )
+            repair_result = repair_segment_timing_with_result(
+                text_adapter,
+                repair_input,
+                repair_options,
+            )
+            repaired_text = _normalize_spacing(repair_result.text)
+            repair_reason = _normalize_spacing(repair_result.reason or "")
+
+            if repair_reason:
+                last_repair_reason = repair_reason
 
             if not repaired_text or _same_spoken_text(repaired_text, best_text):
                 continue
@@ -132,6 +140,7 @@ def repair_overlong_speech_segments(
                 best_text = repaired_text
                 best_audio_path = generated_audio_path
                 best_audio_duration = generated_audio_duration
+                best_repair_reason = repair_reason or best_repair_reason
             else:
                 _delete_file(generated_audio_path)
 
@@ -149,8 +158,7 @@ def repair_overlong_speech_segments(
         if fits_after_repair:
             repaired_count += 1
 
-        segment.metadata = {
-            **segment.metadata,
+        timing_repair_metadata = {
             "timing_repair_status": _repair_status(
                 improved=best_audio_path != current_audio_path,
                 fits=fits_after_repair,
@@ -174,6 +182,15 @@ def repair_overlong_speech_segments(
             "timing_repair_required_speedup_after": format_timing_value(
                 duration_ratio(best_audio_duration, segment.duration)
             ),
+        }
+
+        repair_reason = best_repair_reason or last_repair_reason
+        if repair_reason:
+            timing_repair_metadata["timing_repair_model_reason"] = repair_reason
+
+        segment.metadata = {
+            **segment.metadata,
+            **timing_repair_metadata,
         }
 
     repaired.metadata = {

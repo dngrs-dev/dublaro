@@ -1,10 +1,15 @@
 """Text adaptation adapter interfaces."""
 
 from dublaro.adapters.text_adapter.base import (
+    StructuredTextAdapter,
+    StructuredTimingRepairTextAdapter,
     TextAdaptationOptions,
     TextAdapter,
+    TextAdapterResult,
     TextTimingRepairOptions,
     TimingRepairTextAdapter,
+    adapt_segment_with_result,
+    repair_segment_timing_with_result,
 )
 from dublaro.adapters.text_adapter.fake import FakeTextAdapter
 from dublaro.adapters.text_adapter.ollama import (
@@ -27,9 +32,14 @@ __all__ = [
     "FakeTextAdapter",
     "OllamaTextAdapter",
     "RuleBasedTextAdapter",
+    "StructuredTextAdapter",
+    "StructuredTimingRepairTextAdapter",
     "TextAdaptationOptions",
     "TextAdapter",
+    "TextAdapterResult",
     "TextTimingRepairOptions",
     "TimingRepairTextAdapter",
+    "adapt_segment_with_result",
     "check_ollama_model_available",
+    "repair_segment_timing_with_result",
 ]

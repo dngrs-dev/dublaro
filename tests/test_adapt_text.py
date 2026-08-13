@@ -1,11 +1,36 @@
 from pathlib import Path
 
-from dublaro.adapters.text_adapter import FakeTextAdapter, RuleBasedTextAdapter
+from dublaro.adapters.text_adapter import (
+    FakeTextAdapter,
+    RuleBasedTextAdapter,
+    TextAdapterResult,
+)
 from dublaro.pipeline.adapt_text import (
     adapt_transcript_text,
     default_adapted_transcript_path,
 )
 from dublaro.schemas import Segment, Transcript
+
+
+class ReasoningTextAdapter:
+    name = "reasoning"
+
+    def adapt_segment(
+        self,
+        segment: Segment,
+        options: object,
+    ) -> str:
+        return self.adapt_segment_result(segment, options).text
+
+    def adapt_segment_result(
+        self,
+        segment: Segment,
+        options: object,
+    ) -> TextAdapterResult:
+        return TextAdapterResult(
+            text="Short adapted text.",
+            reason="Made the line shorter for timing.",
+        )
 
 
 def test_adapt_transcript_text_uses_translated_text() -> None:
@@ -111,6 +136,33 @@ def test_adapt_transcript_text_records_timing_metadata() -> None:
     assert segment.metadata["adaptation_status"] == "over_budget_preserved"
     assert segment.metadata["adaptation_required_chars_per_second"] == "18.00"
     assert adapted.metadata["text_adapter_preserve_meaning"] == "true"
+
+
+def test_adapt_transcript_text_records_adapter_reason() -> None:
+    transcript = Transcript(
+        id="lesson-1",
+        source_language="en",
+        target_language="pl",
+        segments=[
+            Segment(
+                id="seg-0001",
+                start=0.0,
+                end=1.0,
+                translated_text="This is a longer translated line.",
+            )
+        ],
+    )
+
+    adapted = adapt_transcript_text(
+        transcript,
+        adapter=ReasoningTextAdapter(),
+    )
+
+    assert adapted.segments[0].adapted_text == "Short adapted text."
+    assert (
+        adapted.segments[0].metadata["adaptation_reason"]
+        == "Made the line shorter for timing."
+    )
 
 
 def test_default_adapted_transcript_path() -> None:

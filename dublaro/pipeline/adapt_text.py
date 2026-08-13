@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from dublaro.adapters.text_adapter.base import TextAdaptationOptions, TextAdapter
+from dublaro.adapters.text_adapter.base import (
+    TextAdaptationOptions,
+    TextAdapter,
+    adapt_segment_with_result,
+)
 from dublaro.schemas import Segment, Transcript
 
 
@@ -35,8 +39,9 @@ def adapt_transcript_text(
 
     for segment in adapted.segments:
         original_text = _adaptation_source_text(segment)
-        segment.adapted_text = adapter.adapt_segment(segment, options)
-        _write_adaptation_metadata(segment, original_text, options)
+        result = adapt_segment_with_result(adapter, segment, options)
+        segment.adapted_text = result.text
+        _write_adaptation_metadata(segment, original_text, options, result.reason)
 
     return adapted
 
@@ -56,6 +61,7 @@ def _write_adaptation_metadata(
     segment: Segment,
     original_text: str,
     options: TextAdaptationOptions,
+    reason: str | None,
 ) -> None:
     adapted_text = _normalize_spacing(segment.adapted_text)
     budget = _character_budget(segment, options)
@@ -85,6 +91,9 @@ def _write_adaptation_metadata(
             metadata["adaptation_status"] = "over_budget_preserved"
         else:
             metadata["adaptation_status"] = "over_budget"
+
+    if reason:
+        metadata["adaptation_reason"] = _normalize_spacing(reason)
 
     segment.metadata = {
         **segment.metadata,

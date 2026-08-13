@@ -23,6 +23,11 @@ class TextTimingRepairOptions(BaseModel):
     preserve_meaning: bool = True
 
 
+class TextAdapterResult(BaseModel):
+    text: str = ""
+    reason: str | None = None
+
+
 class TextAdapter(Protocol):
     name: str
 
@@ -32,6 +37,17 @@ class TextAdapter(Protocol):
         options: TextAdaptationOptions,
     ) -> str:
         """Adapt translated text for spoken dubbing."""
+        ...
+
+
+@runtime_checkable
+class StructuredTextAdapter(Protocol):
+    def adapt_segment_result(
+        self,
+        segment: Segment,
+        options: TextAdaptationOptions,
+    ) -> TextAdapterResult:
+        """Adapt text and return auditable model metadata."""
         ...
 
 
@@ -46,3 +62,36 @@ class TimingRepairTextAdapter(Protocol):
     ) -> str:
         """Rewrite spoken text after generated audio is known to be too long."""
         ...
+
+
+@runtime_checkable
+class StructuredTimingRepairTextAdapter(Protocol):
+    def repair_segment_timing_result(
+        self,
+        segment: Segment,
+        options: TextTimingRepairOptions,
+    ) -> TextAdapterResult:
+        """Repair timing and return auditable model metadata."""
+        ...
+
+
+def adapt_segment_with_result(
+    adapter: TextAdapter,
+    segment: Segment,
+    options: TextAdaptationOptions,
+) -> TextAdapterResult:
+    if isinstance(adapter, StructuredTextAdapter):
+        return adapter.adapt_segment_result(segment, options)
+
+    return TextAdapterResult(text=adapter.adapt_segment(segment, options))
+
+
+def repair_segment_timing_with_result(
+    adapter: TimingRepairTextAdapter,
+    segment: Segment,
+    options: TextTimingRepairOptions,
+) -> TextAdapterResult:
+    if isinstance(adapter, StructuredTimingRepairTextAdapter):
+        return adapter.repair_segment_timing_result(segment, options)
+
+    return TextAdapterResult(text=adapter.repair_segment_timing(segment, options))

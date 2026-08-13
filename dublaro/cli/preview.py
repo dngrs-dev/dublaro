@@ -84,6 +84,7 @@ class TimingRepairPreviewRow:
     required_speedup_before: float | None
     required_speedup_after: float | None
     reason: str
+    model_reason: str | None
     text: str
 
 
@@ -286,6 +287,7 @@ def build_timing_repair_preview_report(
                     required_speedup_before=None,
                     required_speedup_after=None,
                     reason="not-attempted",
+                    model_reason=None,
                     text=_timing_repair_segment_text(segment),
                 )
             )
@@ -330,6 +332,10 @@ def build_timing_repair_preview_report(
                     before=before,
                     after=after,
                     max_audio=max_audio,
+                ),
+                model_reason=_metadata_text(
+                    metadata,
+                    "timing_repair_model_reason",
                 ),
                 text=_timing_repair_segment_text(segment),
             )
@@ -429,6 +435,15 @@ def format_optional_factor(value: float | None) -> str:
 
 def timing_preview_needs_attention(preview: TimingPreview) -> bool:
     return preview.status != "ok"
+
+
+def _metadata_text(metadata: dict[str, str], key: str) -> str | None:
+    value = metadata.get(key)
+    if value is None:
+        return None
+
+    cleaned = " ".join(value.split())
+    return cleaned or None
 
 
 def _metadata_float(metadata: dict[str, str], key: str) -> float | None:

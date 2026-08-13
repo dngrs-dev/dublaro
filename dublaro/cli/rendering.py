@@ -393,13 +393,17 @@ def print_timing_repair_preview_report(
             "not_attempted": "dim",
         }.get(row.status, "white")
 
+        reason = row.reason
+        if row.model_reason:
+            reason = f"{reason}; model={row.model_reason}"
+
         console.print(
             f"[{style}]{row.segment_id}[/{style}] "
             f"{row.status} | "
             f"attempts={_format_repair_optional_int(row.attempts)} | "
             f"audio={_format_repair_change(row.audio_duration_before_seconds, row.audio_duration_after_seconds, format_optional_seconds)} | "
             f"speedup={_format_repair_change(row.required_speedup_before, row.required_speedup_after, format_optional_factor)} | "
-            f"reason={row.reason}"
+            f"reason={reason}"
         )
 
         details = [

@@ -636,6 +636,7 @@ def test_preview_repairs_command_shows_timing_repair_decisions(
                         "timing_repair_best_audio_duration_seconds": "1",
                         "timing_repair_required_speedup_before": "1.8",
                         "timing_repair_required_speedup_after": "1",
+                        "timing_repair_model_reason": "Shorter.",
                     },
                 ),
                 Segment(
@@ -676,6 +677,7 @@ def test_preview_repairs_command_shows_timing_repair_decisions(
     assert "1 improved" in result.output
     assert "ollama" in result.output
     assert "seg-repaired" in result.output
+    assert "Shorter." in result.output
     assert "seg-improved" in result.output
     assert "fits-target" in result.output
     assert "shorter-but-over-target" in result.output

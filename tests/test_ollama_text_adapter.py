@@ -36,9 +36,15 @@ class RecordingOllamaTextAdapter(OllamaTextAdapter):
 
 
 def test_ollama_text_adapter_adapts_segment_text() -> None:
-    adapter = RecordingOllamaTextAdapter({"response": "Adapted: Czesc. Lubisz je?"})
+    adapter = RecordingOllamaTextAdapter(
+        {
+            "response": (
+                '{"text": "Czesc. Lubisz je?", "reason": "Shortened repeated wording."}'
+            )
+        }
+    )
 
-    result = adapter.adapt_segment(
+    result = adapter.adapt_segment_result(
         Segment(
             id="seg-1",
             start=0.0,
@@ -53,11 +59,13 @@ def test_ollama_text_adapter_adapts_segment_text() -> None:
         ),
     )
 
-    assert result == "Czesc. Lubisz je?"
+    assert result.text == "Czesc. Lubisz je?"
+    assert result.reason == "Shortened repeated wording."
 
     payload = adapter.requests[0]["payload"]
     assert isinstance(payload, dict)
     assert payload["model"] == "llama3.1"
+    assert payload["format"] == "json"
     assert "Character budget: 20 characters" in str(payload["prompt"])
 
 
@@ -65,6 +73,16 @@ def test_ollama_text_adapter_rejects_missing_response_text() -> None:
     adapter = RecordingOllamaTextAdapter({})
 
     with pytest.raises(ValueError, match="adapted text"):
+        adapter.adapt_segment(
+            Segment(id="seg-1", start=0.0, end=1.0, translated_text="Hello"),
+            TextAdaptationOptions(target_language="pl"),
+        )
+
+
+def test_ollama_text_adapter_rejects_structured_response_without_text() -> None:
+    adapter = RecordingOllamaTextAdapter({"response": '{"reason": "No text."}'})
+
+    with pytest.raises(ValueError, match="structured response"):
         adapter.adapt_segment(
             Segment(id="seg-1", start=0.0, end=1.0, translated_text="Hello"),
             TextAdaptationOptions(target_language="pl"),
