@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from dublaro.cli.workspace import inspect_workspace
+from dublaro.cli.reports.workspace import inspect_workspace
 
 
 def test_inspect_workspace_reports_workspace_and_manifest_artifacts(

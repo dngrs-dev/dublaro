@@ -3,10 +3,10 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.doctor import build_doctor_report
 from dublaro.cli.rendering import (
     print_doctor_report,
 )
+from dublaro.cli.reports.doctor import build_doctor_report
 
 
 def doctor(

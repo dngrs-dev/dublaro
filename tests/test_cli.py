@@ -8,7 +8,7 @@ import pytest
 from dublaro.adapters.diarization import FakeDiarizationAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.audio.wav import read_mono_pcm16_wav, write_mono_pcm16_wav
-from dublaro.cli.doctor import build_doctor_report
+from dublaro.cli.reports.doctor import build_doctor_report
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
 from dublaro.schemas import Segment, Transcript
 from typer.testing import CliRunner
@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 cli = import_module("dublaro.cli.app")
 cli_batch = import_module("dublaro.cli.batch")
 cli_dub_runner = import_module("dublaro.cli.dub_runner")
-cli_doctor = import_module("dublaro.cli.doctor")
+cli_doctor = import_module("dublaro.cli.reports.doctor")
 cli_command_dub = import_module("dublaro.cli.commands.dub")
 cli_command_export_video = import_module("dublaro.cli.commands.export_video")
 cli_command_extract_audio = import_module("dublaro.cli.commands.extract_audio")
@@ -58,8 +58,8 @@ def test_doctor_command_checks_default_environment(
             stderr="",
         )
 
-    monkeypatch.setattr("dublaro.cli.doctor.shutil.which", fake_which)
-    monkeypatch.setattr("dublaro.cli.doctor.subprocess.run", fake_run)
+    monkeypatch.setattr("dublaro.cli.reports.doctor.shutil.which", fake_which)
+    monkeypatch.setattr("dublaro.cli.reports.doctor.subprocess.run", fake_run)
 
     report = build_doctor_report()
 
@@ -115,8 +115,8 @@ piper_model_path = "models/missing.onnx"
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 0, stdout="ffmpeg version test\n")
 
-    monkeypatch.setattr("dublaro.cli.doctor.shutil.which", fake_which)
-    monkeypatch.setattr("dublaro.cli.doctor.subprocess.run", fake_run)
+    monkeypatch.setattr("dublaro.cli.reports.doctor.shutil.which", fake_which)
+    monkeypatch.setattr("dublaro.cli.reports.doctor.subprocess.run", fake_run)
 
     report = build_doctor_report(config_path=config_path)
 

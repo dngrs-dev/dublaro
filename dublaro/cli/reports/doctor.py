@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from dublaro.adapters.tts.piper import default_piper_config_path
-from dublaro.cli.preview import preview_speaker_voice
+from dublaro.cli.reports.preview import preview_speaker_voice
 from dublaro.config import (
     DublaroConfigError,
     LoadedConfig,

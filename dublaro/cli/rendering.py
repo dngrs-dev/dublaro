@@ -5,8 +5,8 @@ from rich.table import Table
 from rich.text import Text
 
 from dublaro.cli.batch import BatchDubJob, BatchDubResult
-from dublaro.cli.doctor import DoctorReport
-from dublaro.cli.preview import (
+from dublaro.cli.reports.doctor import DoctorReport
+from dublaro.cli.reports.preview import (
     SpeakerPreview,
     TimingPreviewReport,
     TimingRepairPreviewReport,
@@ -15,7 +15,7 @@ from dublaro.cli.preview import (
     format_optional_factor,
     format_optional_seconds,
 )
-from dublaro.cli.workspace import WorkspaceInspectionReport
+from dublaro.cli.reports.workspace import WorkspaceInspectionReport
 from dublaro.cli_config import ResolvedDubSettings
 from dublaro.pipeline.dub import (
     DubbingArtifacts,

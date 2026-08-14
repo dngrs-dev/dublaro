@@ -3,12 +3,12 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.preview import (
-    build_timing_preview_report,
-)
 from dublaro.cli.rendering import (
     console,
     print_timing_preview_report,
+)
+from dublaro.cli.reports.preview import (
+    build_timing_preview_report,
 )
 
 

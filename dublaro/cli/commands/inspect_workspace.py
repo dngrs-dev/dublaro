@@ -7,7 +7,9 @@ from dublaro.cli.rendering import (
     console,
     print_workspace_inspection_report,
 )
-from dublaro.cli.workspace import inspect_workspace as inspect_workspace_artifacts
+from dublaro.cli.reports.workspace import (
+    inspect_workspace as inspect_workspace_artifacts,
+)
 
 
 def inspect_workspace(

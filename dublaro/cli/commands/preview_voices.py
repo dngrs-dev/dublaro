@@ -3,12 +3,12 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.preview import (
-    build_voice_samples_preview,
-)
 from dublaro.cli.rendering import (
     console,
     print_voice_samples_preview,
+)
+from dublaro.cli.reports.preview import (
+    build_voice_samples_preview,
 )
 from dublaro.config import (
     DublaroConfigError,

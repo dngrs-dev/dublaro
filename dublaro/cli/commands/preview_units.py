@@ -3,12 +3,12 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.preview import (
-    build_translation_units_preview,
-)
 from dublaro.cli.rendering import (
     console,
     print_translation_units_preview,
+)
+from dublaro.cli.reports.preview import (
+    build_translation_units_preview,
 )
 
 
