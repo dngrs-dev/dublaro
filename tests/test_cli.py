@@ -14,8 +14,8 @@ from dublaro.schemas import Segment, Transcript
 from typer.testing import CliRunner
 
 cli = import_module("dublaro.cli.app")
-cli_batch = import_module("dublaro.cli.batch")
-cli_dub_runner = import_module("dublaro.cli.dub_runner")
+cli_batch = import_module("dublaro.cli.services.batch")
+cli_dub_runner = import_module("dublaro.cli.services.dub_runner")
 cli_doctor = import_module("dublaro.cli.reports.doctor")
 cli_command_dub = import_module("dublaro.cli.commands.dub")
 cli_command_export_video = import_module("dublaro.cli.commands.export_video")

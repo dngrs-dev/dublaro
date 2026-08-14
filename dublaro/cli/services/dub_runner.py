@@ -3,7 +3,7 @@ from typing import cast
 
 import typer
 
-from dublaro.cli.factories import (
+from dublaro.cli.services.adapter_factories import (
     create_asr_adapter,
     create_diarization_adapter,
     create_speaker_voice_preflight_settings,

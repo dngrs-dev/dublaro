@@ -6,7 +6,7 @@ from typing import Literal
 import typer
 
 from dublaro.audio.ffmpeg import FFmpegError
-from dublaro.cli.dub_runner import (
+from dublaro.cli.services.dub_runner import (
     run_dub_preflight,
     run_resolved_dub,
     validate_resolved_dub_settings,

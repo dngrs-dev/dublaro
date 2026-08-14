@@ -3,11 +3,11 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.dub_runner import (
-    parse_srt_text_mode,
-)
 from dublaro.cli.rendering import (
     console,
+)
+from dublaro.cli.services.dub_runner import (
+    parse_srt_text_mode,
 )
 from dublaro.pipeline.subtitles import (
     default_srt_path,

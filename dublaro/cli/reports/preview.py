@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dublaro.adapters.tts import TtsAdapter
-from dublaro.cli.factories import (
+from dublaro.cli.services.adapter_factories import (
     create_speaker_voices,
     create_tts_adapter,
 )

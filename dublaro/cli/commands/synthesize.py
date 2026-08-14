@@ -3,11 +3,11 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.factories import (
-    create_tts_adapter,
-)
 from dublaro.cli.rendering import (
     console,
+)
+from dublaro.cli.services.adapter_factories import (
+    create_tts_adapter,
 )
 from dublaro.pipeline.synthesize import (
     default_speech_output_dir,

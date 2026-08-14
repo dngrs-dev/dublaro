@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from dublaro.cli.dub_runner import validate_resolved_dub_settings
+from dublaro.cli.services.dub_runner import validate_resolved_dub_settings
 from dublaro.cli_config import (
     DubCliOverrides,
     ResolvedDubSettings,

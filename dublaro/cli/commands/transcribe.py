@@ -4,11 +4,11 @@ from typing import Annotated
 import typer
 
 from dublaro.adapters.asr import TranscriptionOptions
-from dublaro.cli.factories import (
-    create_asr_adapter,
-)
 from dublaro.cli.rendering import (
     console,
+)
+from dublaro.cli.services.adapter_factories import (
+    create_asr_adapter,
 )
 from dublaro.pipeline.transcribe import (
     default_transcript_path,

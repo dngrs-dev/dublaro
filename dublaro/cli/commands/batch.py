@@ -3,7 +3,6 @@ from typing import Annotated
 
 import typer
 
-from dublaro.cli.batch import run_batch_dubbing
 from dublaro.cli.rendering import (
     console,
     print_batch_discovered,
@@ -13,6 +12,7 @@ from dublaro.cli.rendering import (
     print_dub_progress,
     print_preflight_report,
 )
+from dublaro.cli.services.batch import run_batch_dubbing
 from dublaro.config import (
     DublaroConfigError,
 )
