@@ -17,6 +17,10 @@ cli = import_module("dublaro.cli.app")
 cli_batch = import_module("dublaro.cli.batch")
 cli_dub_runner = import_module("dublaro.cli.dub_runner")
 cli_doctor = import_module("dublaro.cli.doctor")
+cli_command_dub = import_module("dublaro.cli.commands.dub")
+cli_command_export_video = import_module("dublaro.cli.commands.export_video")
+cli_command_extract_audio = import_module("dublaro.cli.commands.extract_audio")
+cli_command_translate = import_module("dublaro.cli.commands.translate")
 
 
 runner = CliRunner()
@@ -182,7 +186,7 @@ def test_extract_audio_command_calls_extractor(
         return output_path or input_path.with_suffix(".wav")
 
     monkeypatch.setattr(
-        cli,
+        cli_command_extract_audio,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -226,7 +230,7 @@ def test_extract_audio_command_reports_extractor_error(
         raise FileExistsError("already exists")
 
     monkeypatch.setattr(
-        cli,
+        cli_command_extract_audio,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -340,7 +344,7 @@ def test_translate_command_passes_translator_options(
         return FakeTranslationAdapter()
 
     monkeypatch.setattr(
-        cli,
+        cli_command_translate,
         "create_translation_adapter",
         fake_create_translation_adapter,
     )
@@ -935,7 +939,11 @@ def test_export_video_command_writes_dubbed_video(
         output_path.write_bytes(b"fake dubbed video")
         return output_path
 
-    monkeypatch.setattr(cli, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        cli_command_export_video,
+        "export_dubbed_video",
+        fake_export_dubbed_video,
+    )
 
     result = runner.invoke(
         cli.app,
@@ -1234,7 +1242,7 @@ def test_dub_command_runs_full_pipeline(
             "subtitle_embed": "soft",
             "write_manifest": True,
             "manifest_output_path": tmp_path / "video.pl.manifest.json",
-            "progress_callback": cli.print_dub_progress,
+            "progress_callback": cli_command_dub.print_dub_progress,
             "ffmpeg_executable": "ffmpeg-test",
             "resume": False,
             "overwrite": True,
