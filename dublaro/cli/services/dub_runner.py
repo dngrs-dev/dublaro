@@ -83,6 +83,9 @@ def run_dub_preflight(
         source_language=settings.source_language,
         target_language=settings.target_language,
         install_translation_package=settings.install_package,
+        translation_ollama_model=settings.translation_ollama_model,
+        translation_ollama_url=settings.translation_ollama_url,
+        translation_ollama_timeout_seconds=settings.translation_ollama_timeout_seconds,
         text_adapter_backend=settings.text_adapter_backend,
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
@@ -133,6 +136,10 @@ def run_resolved_dub(
         translation_adapter=create_translation_adapter(
             settings.translation_backend,
             auto_install=settings.install_package,
+            ollama_model=settings.translation_ollama_model,
+            ollama_url=settings.translation_ollama_url,
+            ollama_timeout_seconds=settings.translation_ollama_timeout_seconds,
+            ollama_temperature=settings.translation_ollama_temperature,
         ),
         text_adapter=create_text_adapter(
             settings.text_adapter_backend,

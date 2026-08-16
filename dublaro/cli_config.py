@@ -9,6 +9,12 @@ from dublaro.adapters.text_adapter import (
     DEFAULT_OLLAMA_TIMEOUT_SECONDS,
     DEFAULT_OLLAMA_URL,
 )
+from dublaro.adapters.translation import (
+    DEFAULT_OLLAMA_TRANSLATION_MODEL,
+    DEFAULT_OLLAMA_TRANSLATION_TEMPERATURE,
+    DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_TRANSLATION_URL,
+)
 from dublaro.adapters.tts.piper import default_piper_config_path, read_piper_sample_rate
 from dublaro.config import LoadedConfig, VoiceConfig, resolve_config_path
 from dublaro.pipeline.export import (
@@ -45,6 +51,10 @@ class DubCliOverrides:
     diarization_max_speakers: int | None = None
     translation_backend: str | None = None
     install_package: bool | None = None
+    translation_ollama_model: str | None = None
+    translation_ollama_url: str | None = None
+    translation_ollama_timeout_seconds: float | None = None
+    translation_ollama_temperature: float | None = None
     translation_group_segments: bool | None = None
     max_translation_group_pause_seconds: float | None = None
     max_translation_group_duration_seconds: float | None = None
@@ -119,6 +129,10 @@ class ResolvedDubSettings:
     diarization_max_speakers: int | None
     translation_backend: str
     install_package: bool
+    translation_ollama_model: str
+    translation_ollama_url: str
+    translation_ollama_timeout_seconds: float
+    translation_ollama_temperature: float
     translation_group_segments: bool
     max_translation_group_pause_seconds: float
     max_translation_group_duration_seconds: float
@@ -494,6 +508,26 @@ def resolve_dub_settings(
             overrides.install_package,
             config.translation.install_package,
             False,
+        ),
+        translation_ollama_model=_select(
+            overrides.translation_ollama_model,
+            config.translation.ollama_model,
+            DEFAULT_OLLAMA_TRANSLATION_MODEL,
+        ),
+        translation_ollama_url=_select(
+            overrides.translation_ollama_url,
+            config.translation.ollama_url,
+            DEFAULT_OLLAMA_TRANSLATION_URL,
+        ),
+        translation_ollama_timeout_seconds=_select(
+            overrides.translation_ollama_timeout_seconds,
+            config.translation.ollama_timeout_seconds,
+            DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
+        ),
+        translation_ollama_temperature=_select(
+            overrides.translation_ollama_temperature,
+            config.translation.ollama_temperature,
+            DEFAULT_OLLAMA_TRANSLATION_TEMPERATURE,
         ),
         translation_group_segments=_select(
             overrides.translation_group_segments,

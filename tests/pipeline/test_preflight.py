@@ -310,3 +310,51 @@ def test_dub_preflight_checks_ollama_model(
     )
 
     assert {issue.code for issue in report.errors} == {"ollama_model_missing"}
+
+
+def test_dub_preflight_checks_ollama_translation_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub_ffmpeg_ok(monkeypatch)
+
+    def fake_check_ollama_model_available(
+        *,
+        model: str,
+        url: str,
+        timeout_seconds: float,
+    ) -> bool:
+        assert model == "mistral"
+        assert url == "http://ollama.local:11434"
+        assert timeout_seconds == 5.0
+        return False
+
+    monkeypatch.setattr(
+        preflight_module,
+        "check_ollama_model_available",
+        fake_check_ollama_model_available,
+    )
+
+    video_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "output.mp4"
+    video_path.write_bytes(b"fake video")
+
+    report = validate_dub_preflight(
+        video_path=video_path,
+        output_path=output_path,
+        workspace_dir=tmp_path / "workspace",
+        overwrite=False,
+        ffmpeg_executable="ffmpeg",
+        asr_backend="fake",
+        translation_backend="ollama",
+        source_language="en",
+        target_language="pl",
+        install_translation_package=False,
+        translation_ollama_model="mistral",
+        translation_ollama_url="http://ollama.local:11434",
+        translation_ollama_timeout_seconds=120.0,
+        text_adapter_backend="rules",
+        tts_backend="fake",
+    )
+
+    assert {issue.code for issue in report.errors} == {"ollama_model_missing"}

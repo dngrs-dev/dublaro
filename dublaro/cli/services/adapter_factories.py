@@ -19,8 +19,13 @@ from dublaro.adapters.text_adapter import (
     TextAdapter,
 )
 from dublaro.adapters.translation import (
+    DEFAULT_OLLAMA_TRANSLATION_MODEL,
+    DEFAULT_OLLAMA_TRANSLATION_TEMPERATURE,
+    DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_TRANSLATION_URL,
     ArgosTranslationAdapter,
     FakeTranslationAdapter,
+    OllamaTranslationAdapter,
     TranslationAdapter,
 )
 from dublaro.adapters.tts import FakeTtsAdapter, PiperTtsAdapter, TtsAdapter
@@ -76,6 +81,10 @@ def create_translation_adapter(
     backend: str,
     *,
     auto_install: bool = False,
+    ollama_model: str | None = None,
+    ollama_url: str | None = None,
+    ollama_timeout_seconds: float | None = None,
+    ollama_temperature: float | None = None,
 ) -> TranslationAdapter:
     if backend == "fake":
         return FakeTranslationAdapter()
@@ -83,7 +92,28 @@ def create_translation_adapter(
     if backend == "argos":
         return ArgosTranslationAdapter(auto_install=auto_install)
 
-    raise typer.BadParameter("Translation backend must be 'fake' or 'argos'.")
+    if backend == "ollama":
+        try:
+            return OllamaTranslationAdapter(
+                model=ollama_model or DEFAULT_OLLAMA_TRANSLATION_MODEL,
+                url=ollama_url or DEFAULT_OLLAMA_TRANSLATION_URL,
+                timeout_seconds=(
+                    ollama_timeout_seconds
+                    if ollama_timeout_seconds is not None
+                    else DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS
+                ),
+                temperature=(
+                    ollama_temperature
+                    if ollama_temperature is not None
+                    else DEFAULT_OLLAMA_TRANSLATION_TEMPERATURE
+                ),
+            )
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from error
+
+    raise typer.BadParameter(
+        "Translation backend must be 'fake', 'argos', or 'ollama'."
+    )
 
 
 def create_text_adapter(

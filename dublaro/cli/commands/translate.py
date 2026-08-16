@@ -56,7 +56,7 @@ def translate(
         str,
         typer.Option(
             "--translator",
-            help="Translation backend: fake or argos.",
+            help="Translation backend: fake, argos, or ollama.",
         ),
     ] = "fake",
     install_package: Annotated[
@@ -66,6 +66,34 @@ def translate(
             help="Download and install the Argos language package if missing.",
         ),
     ] = False,
+    translation_ollama_model: Annotated[
+        str | None,
+        typer.Option(
+            "--translation-ollama-model",
+            help="Ollama model used when --translator ollama.",
+        ),
+    ] = None,
+    translation_ollama_url: Annotated[
+        str | None,
+        typer.Option(
+            "--translation-ollama-url",
+            help="Ollama server URL used when --translator ollama.",
+        ),
+    ] = None,
+    translation_ollama_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--translation-ollama-timeout",
+            help="Ollama translation request timeout in seconds.",
+        ),
+    ] = None,
+    translation_ollama_temperature: Annotated[
+        float | None,
+        typer.Option(
+            "--translation-ollama-temperature",
+            help="Ollama translation generation temperature.",
+        ),
+    ] = None,
     group_segments: Annotated[
         bool,
         typer.Option(
@@ -99,6 +127,10 @@ def translate(
     adapter = create_translation_adapter(
         translation_backend,
         auto_install=install_package,
+        ollama_model=translation_ollama_model,
+        ollama_url=translation_ollama_url,
+        ollama_timeout_seconds=translation_ollama_timeout_seconds,
+        ollama_temperature=translation_ollama_temperature,
     )
     translated_output = output_path or default_translated_transcript_path(
         transcript_path,

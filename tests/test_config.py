@@ -102,3 +102,29 @@ ollama_temperature = 0.1
     assert loaded.config.dub.text_adapter.ollama_url == "http://localhost:11434"
     assert loaded.config.dub.text_adapter.ollama_timeout_seconds == 12.0
     assert loaded.config.dub.text_adapter.ollama_temperature == 0.1
+
+
+def test_load_config_reads_ollama_translation_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+
+[dub.translation]
+backend = "ollama"
+ollama_model = "mistral"
+ollama_url = "http://ollama.local:11434"
+ollama_timeout_seconds = 120.0
+ollama_temperature = 0.1
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_config(config_path)
+
+    assert loaded.config.dub.translation.backend == "ollama"
+    assert loaded.config.dub.translation.ollama_model == "mistral"
+    assert loaded.config.dub.translation.ollama_url == "http://ollama.local:11434"
+    assert loaded.config.dub.translation.ollama_timeout_seconds == 120.0
+    assert loaded.config.dub.translation.ollama_temperature == 0.1

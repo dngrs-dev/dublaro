@@ -99,7 +99,7 @@ def dub(
         str | None,
         typer.Option(
             "--translator",
-            help="Translation backend: fake or argos.",
+            help="Translation backend: fake, argos, or ollama.",
         ),
     ] = None,
     text_adapter_backend: Annotated[
@@ -219,6 +219,34 @@ def dub(
         typer.Option(
             "--install-package/--no-install-package",
             help="Download and install translation package if missing.",
+        ),
+    ] = None,
+    translation_ollama_model: Annotated[
+        str | None,
+        typer.Option(
+            "--translation-ollama-model",
+            help="Ollama model used when --translator ollama.",
+        ),
+    ] = None,
+    translation_ollama_url: Annotated[
+        str | None,
+        typer.Option(
+            "--translation-ollama-url",
+            help="Ollama server URL used when --translator ollama.",
+        ),
+    ] = None,
+    translation_ollama_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--translation-ollama-timeout",
+            help="Ollama translation request timeout in seconds.",
+        ),
+    ] = None,
+    translation_ollama_temperature: Annotated[
+        float | None,
+        typer.Option(
+            "--translation-ollama-temperature",
+            help="Ollama translation generation temperature.",
         ),
     ] = None,
     translation_group_segments: Annotated[
@@ -483,6 +511,10 @@ def dub(
                 diarization_max_speakers=diarization_max_speakers,
                 translation_backend=translation_backend,
                 install_package=install_package,
+                translation_ollama_model=translation_ollama_model,
+                translation_ollama_url=translation_ollama_url,
+                translation_ollama_timeout_seconds=translation_ollama_timeout_seconds,
+                translation_ollama_temperature=translation_ollama_temperature,
                 translation_group_segments=translation_group_segments,
                 max_translation_group_pause_seconds=max_translation_group_pause_seconds,
                 max_translation_group_duration_seconds=(

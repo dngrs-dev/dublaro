@@ -12,6 +12,11 @@ from dublaro.adapters.text_adapter import (
     DEFAULT_OLLAMA_URL,
     check_ollama_model_available,
 )
+from dublaro.adapters.translation import (
+    DEFAULT_OLLAMA_TRANSLATION_MODEL,
+    DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
+    DEFAULT_OLLAMA_TRANSLATION_URL,
+)
 
 PreflightSeverity = Literal["error", "warning"]
 
@@ -65,6 +70,9 @@ def validate_dub_preflight(
     source_language: str | None,
     target_language: str,
     install_translation_package: bool,
+    translation_ollama_model: str = DEFAULT_OLLAMA_TRANSLATION_MODEL,
+    translation_ollama_url: str = DEFAULT_OLLAMA_TRANSLATION_URL,
+    translation_ollama_timeout_seconds: float = DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
     text_adapter_backend: str = "rules",
     ollama_model: str = DEFAULT_OLLAMA_MODEL,
     ollama_url: str = DEFAULT_OLLAMA_URL,
@@ -144,12 +152,26 @@ def validate_dub_preflight(
         auto_install=install_translation_package,
     )
 
+    checked_ollama_targets: set[tuple[str, str]] = set()
+
     _check_ollama(
         issues,
-        text_adapter_backend=text_adapter_backend,
+        enabled=translation_backend == "ollama",
+        label="Translation Ollama",
+        ollama_model=translation_ollama_model,
+        ollama_url=translation_ollama_url,
+        ollama_timeout_seconds=translation_ollama_timeout_seconds,
+        checked_targets=checked_ollama_targets,
+    )
+
+    _check_ollama(
+        issues,
+        enabled=text_adapter_backend == "ollama",
+        label="Text adapter Ollama",
         ollama_model=ollama_model,
         ollama_url=ollama_url,
         ollama_timeout_seconds=ollama_timeout_seconds,
+        checked_targets=checked_ollama_targets,
     )
 
     return DubPreflightReport(tuple(issues))
@@ -394,13 +416,22 @@ def _load_argos_translate_module(
 def _check_ollama(
     issues: list[PreflightIssue],
     *,
-    text_adapter_backend: str,
+    enabled: bool,
+    label: str,
     ollama_model: str,
     ollama_url: str,
     ollama_timeout_seconds: float,
+    checked_targets: set[tuple[str, str]] | None = None,
 ) -> None:
-    if text_adapter_backend != "ollama":
+    if not enabled:
         return
+
+    target = (ollama_url, ollama_model)
+    if checked_targets is not None:
+        if target in checked_targets:
+            return
+
+        checked_targets.add(target)
 
     timeout_seconds = min(
         ollama_timeout_seconds,
@@ -417,8 +448,8 @@ def _check_ollama(
         _add_error(
             issues,
             "ollama_unavailable",
-            f"Ollama is not available: {error}",
-            "Start Ollama or pass --ollama-url with the correct server URL.",
+            f"{label} is not available: {error}",
+            "Start Ollama or pass the correct Ollama server URL.",
         )
         return
 
@@ -426,7 +457,7 @@ def _check_ollama(
         _add_error(
             issues,
             "ollama_model_missing",
-            f"Ollama model is not available: {ollama_model}",
+            f"{label} model is not available: {ollama_model}",
             f"Run: ollama pull {ollama_model}",
         )
 

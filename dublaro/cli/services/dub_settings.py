@@ -37,6 +37,10 @@ class DubCommandOverrides:
     diarization_max_speakers: int | None = None
     translation_backend: str | None = None
     install_package: bool | None = None
+    translation_ollama_model: str | None = None
+    translation_ollama_url: str | None = None
+    translation_ollama_timeout_seconds: float | None = None
+    translation_ollama_temperature: float | None = None
     translation_group_segments: bool | None = None
     max_translation_group_pause_seconds: float | None = None
     max_translation_group_duration_seconds: float | None = None
@@ -98,6 +102,10 @@ class DubCommandOverrides:
             diarization_max_speakers=self.diarization_max_speakers,
             translation_backend=self.translation_backend,
             install_package=self.install_package,
+            translation_ollama_model=self.translation_ollama_model,
+            translation_ollama_url=self.translation_ollama_url,
+            translation_ollama_timeout_seconds=self.translation_ollama_timeout_seconds,
+            translation_ollama_temperature=self.translation_ollama_temperature,
             translation_group_segments=self.translation_group_segments,
             max_translation_group_pause_seconds=(
                 self.max_translation_group_pause_seconds
