@@ -41,6 +41,7 @@ def test_dub_command_runs_full_pipeline(
         *,
         source_language: str | None,
         target_language: str,
+        text_workflow: str = "translate-then-adapt",
         workspace_dir: Path,
         asr_adapter: object,
         diarization_adapter: object | None = None,
@@ -51,6 +52,7 @@ def test_dub_command_runs_full_pipeline(
         diarize: bool = False,
         diarization_min_speakers: int | None = None,
         diarization_max_speakers: int | None = None,
+        dubbing_script_adapter: object | None = None,
         translation_group_segments: bool = True,
         max_translation_group_pause_seconds: float = 0.8,
         max_translation_group_duration_seconds: float = 12.0,
@@ -88,11 +90,13 @@ def test_dub_command_runs_full_pipeline(
                 "output_path": output_path,
                 "source_language": source_language,
                 "target_language": target_language,
+                "text_workflow": text_workflow,
                 "workspace_dir": workspace_dir,
                 "speaker_voices": speaker_voices,
                 "diarize": diarize,
                 "diarization_min_speakers": diarization_min_speakers,
                 "diarization_max_speakers": diarization_max_speakers,
+                "dubbing_script_adapter": dubbing_script_adapter,
                 "translation_group_segments": translation_group_segments,
                 "max_translation_group_pause_seconds": max_translation_group_pause_seconds,
                 "max_translation_group_duration_seconds": max_translation_group_duration_seconds,
@@ -192,11 +196,13 @@ def test_dub_command_runs_full_pipeline(
             "output_path": output_path,
             "source_language": "en",
             "target_language": "pl",
+            "text_workflow": "translate-then-adapt",
             "workspace_dir": workspace_dir,
             "speaker_voices": None,
             "diarize": False,
             "diarization_min_speakers": None,
             "diarization_max_speakers": None,
+            "dubbing_script_adapter": None,
             "translation_group_segments": True,
             "max_translation_group_pause_seconds": 0.8,
             "max_translation_group_duration_seconds": 12.0,
@@ -795,3 +801,55 @@ def test_dub_command_passes_diarization_options(
 
     assert isinstance(diarization_adapter, FakeDiarizationAdapter)
     assert diarization_adapter.name == "fake-diarization"
+
+
+def test_dub_command_passes_text_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    class FakeArtifacts:
+        def __init__(self, dubbed_video_path: Path, workspace_dir: Path) -> None:
+            self.dubbed_video_path = dubbed_video_path
+            self.workspace_dir = workspace_dir
+            self.fitted_transcript_path = None
+            self.mixed_audio_path = None
+            self.srt_path = None
+            self.manifest_path = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append(kwargs)
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, tmp_path / "workspace")
+
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--translator",
+            "ollama",
+            "--text-workflow",
+            "llm-dubbing",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["text_workflow"] == "llm-dubbing"
+    assert calls[0]["dubbing_script_adapter"] is not None

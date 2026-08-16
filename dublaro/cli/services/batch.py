@@ -100,6 +100,7 @@ def run_batch_dubbing(
     input_path: Path,
     config_path: Path | None,
     target_language: str | None,
+    text_workflow: str | None,
     output_dir: Path | None,
     source_language: str | None,
     workspace_root: Path | None,
@@ -161,6 +162,7 @@ def run_batch_dubbing(
                 overrides=DubCliOverrides(
                     source_language=source_language,
                     target_language=target_language,
+                    text_workflow=text_workflow,
                     output_dir=job_output_dir,
                     workspace_dir=default_batch_workspace_dir(
                         input_path,
@@ -178,7 +180,7 @@ def run_batch_dubbing(
             )
             resolved_output_path = settings.output_path
 
-            parsed_srt_text_mode, parsed_subtitle_embed = (
+            parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed = (
                 validate_resolved_dub_settings(settings)
             )
 
@@ -215,6 +217,7 @@ def run_batch_dubbing(
             artifacts = run_resolved_dub(
                 video_path,
                 settings,
+                parsed_text_workflow=parsed_text_workflow,
                 parsed_srt_text_mode=parsed_srt_text_mode,
                 parsed_subtitle_embed=parsed_subtitle_embed,
                 progress_callback=on_dub_progress,

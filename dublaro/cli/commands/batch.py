@@ -44,6 +44,13 @@ def batch(
             help="Target language code.",
         ),
     ] = None,
+    text_workflow: Annotated[
+        str | None,
+        typer.Option(
+            "--text-workflow",
+            help="Text workflow: translate-then-adapt or llm-dubbing.",
+        ),
+    ] = None,
     output_dir: Annotated[
         Path | None,
         typer.Option(
@@ -143,6 +150,7 @@ def batch(
             input_path=input_path,
             config_path=config_path,
             target_language=target_language,
+            text_workflow=text_workflow,
             output_dir=output_dir,
             source_language=source_language,
             workspace_root=workspace_root,

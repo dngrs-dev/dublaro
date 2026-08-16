@@ -52,6 +52,13 @@ def dub(
             help="Target language code.",
         ),
     ] = None,
+    text_workflow: Annotated[
+        str | None,
+        typer.Option(
+            "--text-workflow",
+            help="Text workflow: translate-then-adapt or llm-dubbing.",
+        ),
+    ] = None,
     output_path: Annotated[
         Path | None,
         typer.Option(
@@ -489,6 +496,7 @@ def dub(
             overrides=DubCommandOverrides(
                 source_language=source_language,
                 target_language=target_language,
+                text_workflow=text_workflow,
                 output_path=output_path,
                 output_dir=output_dir,
                 workspace_dir=workspace_dir,
@@ -572,6 +580,7 @@ def dub(
         artifacts = run_resolved_dub(
             video_path,
             settings,
+            parsed_text_workflow=resolved_dub.text_workflow,
             parsed_srt_text_mode=resolved_dub.srt_text_mode,
             parsed_subtitle_embed=resolved_dub.subtitle_embed,
             progress_callback=print_dub_progress,

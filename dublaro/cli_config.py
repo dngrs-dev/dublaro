@@ -29,6 +29,7 @@ T = TypeVar("T")
 class DubCliOverrides:
     source_language: str | None = None
     target_language: str | None = None
+    text_workflow: str | None = None
     output_path: Path | None = None
     output_dir: Path | None = None
     workspace_dir: Path | None = None
@@ -108,6 +109,7 @@ class ResolvedVoiceProfileSettings:
 class ResolvedDubSettings:
     source_language: str | None
     target_language: str
+    text_workflow: str
     output_path: Path
     workspace_dir: Path
     resume: bool
@@ -460,6 +462,11 @@ def resolve_dub_settings(
             config.source_language,
         ),
         target_language=target_language,
+        text_workflow=_select(
+            overrides.text_workflow,
+            config.text_workflow,
+            "translate-then-adapt",
+        ),
         output_path=output_path,
         workspace_dir=workspace_dir,
         resume=_select(overrides.resume, config.resume, False),

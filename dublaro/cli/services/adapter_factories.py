@@ -8,6 +8,10 @@ from dublaro.adapters.diarization import (
     FakeDiarizationAdapter,
     PyannoteDiarizationAdapter,
 )
+from dublaro.adapters.dubbing_script import (
+    DubbingScriptAdapter,
+    OllamaDubbingScriptAdapter,
+)
 from dublaro.adapters.text_adapter import (
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_TEMPERATURE,
@@ -150,6 +154,38 @@ def create_text_adapter(
             raise typer.BadParameter(str(error)) from error
 
     raise typer.BadParameter("Text adapter must be 'fake', 'rules', or 'ollama'.")
+
+
+def create_dubbing_script_adapter(
+    backend: str,
+    *,
+    ollama_model: str | None = None,
+    ollama_url: str | None = None,
+    ollama_timeout_seconds: float | None = None,
+    ollama_temperature: float | None = None,
+) -> DubbingScriptAdapter:
+    if backend == "ollama":
+        try:
+            return OllamaDubbingScriptAdapter(
+                model=ollama_model or DEFAULT_OLLAMA_TRANSLATION_MODEL,
+                url=ollama_url or DEFAULT_OLLAMA_TRANSLATION_URL,
+                timeout_seconds=(
+                    ollama_timeout_seconds
+                    if ollama_timeout_seconds is not None
+                    else DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS
+                ),
+                temperature=(
+                    ollama_temperature
+                    if ollama_temperature is not None
+                    else DEFAULT_OLLAMA_TRANSLATION_TEMPERATURE
+                ),
+            )
+        except ValueError as error:
+            raise typer.BadParameter(str(error)) from error
+
+    raise typer.BadParameter(
+        "LLM dubbing text workflow currently requires translation backend 'ollama'."
+    )
 
 
 def create_tts_adapter(

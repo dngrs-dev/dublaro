@@ -4,6 +4,10 @@ from pathlib import Path
 
 import pytest
 from dublaro.adapters.asr import FakeAsrAdapter
+from dublaro.adapters.dubbing_script import (
+    DubbingScriptOptions,
+    DubbingScriptResult,
+)
 from dublaro.adapters.text_adapter import FakeTextAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.adapters.tts import FakeTtsAdapter
@@ -41,6 +45,21 @@ class ExplodingTtsAdapter:
 
     def synthesize_segment(self, *args: object, **kwargs: object) -> Path:
         raise AssertionError("TTS should not run during resume")
+
+
+class FakeDubbingScriptAdapter:
+    name = "fake-dubbing-script"
+
+    def generate_segment_script(
+        self,
+        segment: Segment,
+        options: DubbingScriptOptions,
+    ) -> DubbingScriptResult:
+        return DubbingScriptResult(
+            translated_text="Czesc swiecie.",
+            adapted_text="Czesc.",
+            reason="short enough for timing",
+        )
 
 
 class ManifestTtsAdapter(FakeTtsAdapter):
@@ -1173,3 +1192,74 @@ def test_dub_video_rejects_resume_with_overwrite(tmp_path: Path) -> None:
             resume=True,
             overwrite=True,
         )
+
+
+def test_dub_video_can_use_llm_dubbing_text_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        return output_file
+
+    monkeypatch.setattr(
+        dub_stages,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=ExplodingTranslationAdapter(),
+        text_adapter=ExplodingTextAdapter(),
+        dubbing_script_adapter=FakeDubbingScriptAdapter(),
+        text_workflow="llm-dubbing",
+        tts_adapter=FakeTtsAdapter(),
+        overwrite=True,
+    )
+
+    translated = load_transcript(artifacts.translated_transcript_path)
+    adapted = load_transcript(artifacts.adapted_transcript_path)
+
+    assert translated.segments[0].translated_text == "Czesc swiecie."
+    assert translated.segments[0].adapted_text == ""
+    assert adapted.segments[0].translated_text == "Czesc swiecie."
+    assert adapted.segments[0].adapted_text == "Czesc."
+    assert adapted.metadata["text_workflow"] == "llm-dubbing"

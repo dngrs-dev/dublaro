@@ -1,14 +1,18 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from dublaro.adapters.asr import AsrAdapter
 from dublaro.adapters.diarization import DiarizationAdapter
+from dublaro.adapters.dubbing_script import DubbingScriptAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
+
+TextWorkflowMode = Literal["translate-then-adapt", "llm-dubbing"]
 
 
 @dataclass(frozen=True)
@@ -17,6 +21,7 @@ class DubAdapters:
     translation: TranslationAdapter
     text_adapter: TextAdapter
     tts: TtsAdapter
+    dubbing_script: DubbingScriptAdapter | None = None
     diarization: DiarizationAdapter | None = None
     speaker_voices: Mapping[str, SpeakerVoice] | None = None
 
@@ -25,6 +30,7 @@ class DubAdapters:
 class DubOptions:
     source_language: str | None
     target_language: str
+    text_workflow: TextWorkflowMode = "translate-then-adapt"
     asr_sample_rate: int = 16_000
     speech_sample_rate: int = 24_000
     repair_timing: bool = False
@@ -59,6 +65,11 @@ class DubOptions:
     overwrite: bool = False
 
     def __post_init__(self) -> None:
+        if self.text_workflow not in {"translate-then-adapt", "llm-dubbing"}:
+            raise ValueError(
+                "text_workflow must be 'translate-then-adapt' or 'llm-dubbing'"
+            )
+
         if self.max_timing_repair_attempts < 1:
             raise ValueError("max_timing_repair_attempts must be >= 1")
 

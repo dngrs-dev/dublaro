@@ -6,6 +6,7 @@ import typer
 from dublaro.cli.services.adapter_factories import (
     create_asr_adapter,
     create_diarization_adapter,
+    create_dubbing_script_adapter,
     create_speaker_voice_preflight_settings,
     create_speaker_voices,
     create_text_adapter,
@@ -18,8 +19,20 @@ from dublaro.pipeline.dub import (
     DubbingProgressCallback,
     dub_video,
 )
+from dublaro.pipeline.dub_plan import TextWorkflowMode
 from dublaro.pipeline.preflight import DubPreflightReport, validate_dub_preflight
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
+
+
+def parse_text_workflow_mode(mode: str) -> TextWorkflowMode:
+    allowed_modes = {"translate-then-adapt", "llm-dubbing"}
+
+    if mode not in allowed_modes:
+        raise typer.BadParameter(
+            "Text workflow must be one of: translate-then-adapt, llm-dubbing."
+        )
+
+    return cast(TextWorkflowMode, mode)
 
 
 def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
@@ -44,9 +57,16 @@ def parse_subtitle_embed_mode(mode: str) -> SubtitleEmbedMode:
 
 def validate_resolved_dub_settings(
     settings: ResolvedDubSettings,
-) -> tuple[SrtTextMode, SubtitleEmbedMode]:
+) -> tuple[TextWorkflowMode, SrtTextMode, SubtitleEmbedMode]:
+    parsed_text_workflow = parse_text_workflow_mode(settings.text_workflow)
     parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
     parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
+
+    if (
+        parsed_text_workflow == "llm-dubbing"
+        and settings.translation_backend != "ollama"
+    ):
+        raise ValueError("--text-workflow llm-dubbing requires --translator ollama.")
 
     if settings.manifest_output_path is not None and not settings.write_manifest:
         raise ValueError(
@@ -65,7 +85,7 @@ def validate_resolved_dub_settings(
             "--max-speech-speedup."
         )
 
-    return parsed_srt_text_mode, parsed_subtitle_embed
+    return parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed
 
 
 def run_dub_preflight(
@@ -107,10 +127,22 @@ def run_resolved_dub(
     video_path: Path,
     settings: ResolvedDubSettings,
     *,
+    parsed_text_workflow: TextWorkflowMode,
     parsed_srt_text_mode: SrtTextMode,
     parsed_subtitle_embed: SubtitleEmbedMode,
     progress_callback: DubbingProgressCallback | None,
 ) -> DubbingArtifacts:
+    dubbing_script_adapter = (
+        create_dubbing_script_adapter(
+            settings.translation_backend,
+            ollama_model=settings.translation_ollama_model,
+            ollama_url=settings.translation_ollama_url,
+            ollama_timeout_seconds=settings.translation_ollama_timeout_seconds,
+            ollama_temperature=settings.translation_ollama_temperature,
+        )
+        if parsed_text_workflow == "llm-dubbing"
+        else None
+    )
     return dub_video(
         video_path,
         settings.output_path,
@@ -148,6 +180,8 @@ def run_resolved_dub(
             ollama_timeout_seconds=settings.ollama_timeout_seconds,
             ollama_temperature=settings.ollama_temperature,
         ),
+        text_workflow=parsed_text_workflow,
+        dubbing_script_adapter=dubbing_script_adapter,
         tts_adapter=create_tts_adapter(
             settings.tts_backend,
             piper_model_path=settings.piper_model_path,

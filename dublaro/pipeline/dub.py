@@ -5,17 +5,22 @@ from pathlib import Path
 
 from dublaro.adapters.asr import AsrAdapter
 from dublaro.adapters.diarization import DiarizationAdapter
+from dublaro.adapters.dubbing_script import DubbingScriptAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
-from dublaro.pipeline.dub_plan import DubAdapters, DubOptions, DubPaths
+from dublaro.pipeline.dub_plan import (
+    DubAdapters,
+    DubOptions,
+    DubPaths,
+    TextWorkflowMode,
+)
 from dublaro.pipeline.dub_stages import (
     DubbingProgressCallback,
     DubbingProgressStatus,
     DubbingProgressStep,
     DubRunContext,
     ManifestInputs,
-    _adapt_translated_text,
     _align_speech_track,
     _diarize_source_transcript,
     _export_video,
@@ -24,10 +29,10 @@ from dublaro.pipeline.dub_stages import (
     _fit_video_to_speech,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
+    _prepare_text_for_dubbing,
     _repair_speech_timing,
     _synthesize_speech,
     _transcribe_source_audio,
-    _translate_source_transcript,
     _write_manifest,
 )
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
@@ -79,6 +84,7 @@ def dub_video(
     translation_adapter: TranslationAdapter,
     text_adapter: TextAdapter,
     tts_adapter: TtsAdapter,
+    dubbing_script_adapter: DubbingScriptAdapter | None = None,
     speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     diarization_adapter: DiarizationAdapter | None = None,
     diarize: bool = False,
@@ -100,6 +106,7 @@ def dub_video(
     speech_gain: float = 1.0,
     ducking_margin_seconds: float = 0.05,
     ducking_fade_seconds: float = 0.05,
+    text_workflow: TextWorkflowMode = "translate-then-adapt",
     translation_group_segments: bool = True,
     max_translation_group_pause_seconds: float = 0.8,
     max_translation_group_duration_seconds: float = 12.0,
@@ -142,6 +149,7 @@ def dub_video(
         speech_gain=speech_gain,
         ducking_margin_seconds=ducking_margin_seconds,
         ducking_fade_seconds=ducking_fade_seconds,
+        text_workflow=text_workflow,
         translation_group_segments=translation_group_segments,
         max_translation_group_pause_seconds=max_translation_group_pause_seconds,
         max_translation_group_duration_seconds=max_translation_group_duration_seconds,
@@ -166,6 +174,7 @@ def dub_video(
         translation=translation_adapter,
         text_adapter=text_adapter,
         tts=tts_adapter,
+        dubbing_script=dubbing_script_adapter,
         speaker_voices=speaker_voices,
     )
 
@@ -207,9 +216,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         source_transcript,
     )
 
-    translated_transcript = _translate_source_transcript(context, source_transcript)
-
-    adapted_transcript = _adapt_translated_text(context, translated_transcript)
+    text_workflow = _prepare_text_for_dubbing(context, source_transcript)
+    translated_transcript = text_workflow.translated_transcript
+    adapted_transcript = text_workflow.adapted_transcript
 
     synthesized_transcript = _synthesize_speech(context, adapted_transcript)
 

@@ -21,6 +21,7 @@ from dublaro.pipeline.dub_plan import (
     DubOptions,
     DubPaths,
 )
+from dublaro.pipeline.dubbing_script import generate_dubbing_script_transcripts
 from dublaro.pipeline.export import export_dubbed_video
 from dublaro.pipeline.fit_speech import fit_generated_speech_to_segments
 from dublaro.pipeline.fit_video import plan_video_slowdown, scale_transcript_timing
@@ -49,6 +50,7 @@ DubbingProgressStep = Literal[
     "diarize",
     "translate",
     "adapt_text",
+    "dubbing_script",
     "synthesize",
     "repair_timing",
     "fit_speech",
@@ -75,6 +77,12 @@ class DubRunContext:
     adapters: DubAdapters
     artifact_paths: DubArtifactPaths
     progress_callback: DubbingProgressCallback | None = None
+
+
+@dataclass(frozen=True)
+class TextWorkflowResult:
+    translated_transcript: Transcript
+    adapted_transcript: Transcript
 
 
 @dataclass(frozen=True)
@@ -356,6 +364,81 @@ def _adapt_translated_text(
         )
         save_transcript(adapted_transcript, adapted_transcript_path)
         return adapted_transcript
+
+
+def _prepare_text_for_dubbing(
+    context: DubRunContext,
+    source_transcript: Transcript,
+) -> TextWorkflowResult:
+    if context.options.text_workflow == "translate-then-adapt":
+        translated = _translate_source_transcript(context, source_transcript)
+        adapted = _adapt_translated_text(context, translated)
+        return TextWorkflowResult(
+            translated_transcript=translated,
+            adapted_transcript=adapted,
+        )
+
+    if context.options.text_workflow == "llm-dubbing":
+        return _generate_llm_dubbing_script(context, source_transcript)
+
+    raise ValueError(f"Unsupported text workflow: {context.options.text_workflow}")
+
+
+def _generate_llm_dubbing_script(
+    context: DubRunContext,
+    source_transcript: Transcript,
+) -> TextWorkflowResult:
+    if context.adapters.dubbing_script is None:
+        raise ValueError(
+            "dubbing_script_adapter is required when text_workflow is llm-dubbing."
+        )
+
+    translated_path = context.artifact_paths.translated_transcript_path
+    adapted_path = context.artifact_paths.adapted_transcript_path
+
+    if context.options.resume:
+        reusable_translated = load_reusable_transcript(translated_path)
+        reusable_adapted = load_reusable_transcript(adapted_path)
+
+        if reusable_translated is not None and reusable_adapted is not None:
+            _progress_skipped(
+                context.progress_callback,
+                "dubbing_script",
+                f"Using existing LLM dubbing script: {adapted_path}.",
+            )
+            return TextWorkflowResult(
+                translated_transcript=reusable_translated,
+                adapted_transcript=reusable_adapted,
+            )
+
+    with _progress_stage(
+        context.progress_callback,
+        "dubbing_script",
+        "Generating LLM dubbing script.",
+    ):
+        result = generate_dubbing_script_transcripts(
+            source_transcript,
+            adapter=context.adapters.dubbing_script,
+            target_language=context.options.target_language,
+            source_language=context.options.source_language,
+            group_segments=context.options.translation_group_segments,
+            max_group_pause_seconds=(
+                context.options.max_translation_group_pause_seconds
+            ),
+            max_group_duration_seconds=(
+                context.options.max_translation_group_duration_seconds
+            ),
+            max_sentence_group_duration_seconds=(
+                context.options.max_translation_sentence_group_duration_seconds
+            ),
+        )
+        save_transcript(result.translated, translated_path)
+        save_transcript(result.adapted, adapted_path)
+
+        return TextWorkflowResult(
+            translated_transcript=result.translated,
+            adapted_transcript=result.adapted,
+        )
 
 
 def _synthesize_speech(
@@ -796,6 +879,7 @@ def _write_manifest(
             diarization_adapter=adapters.diarization,
             translation_adapter=adapters.translation,
             text_adapter=adapters.text_adapter,
+            dubbing_script_adapter=adapters.dubbing_script,
             tts_adapter=adapters.tts,
             speaker_voices=adapters.speaker_voices,
             options=DubbingOptionsManifest(
@@ -818,6 +902,7 @@ def _write_manifest(
                 speech_gain=run_options.speech_gain,
                 ducking_margin_seconds=run_options.ducking_margin_seconds,
                 ducking_fade_seconds=run_options.ducking_fade_seconds,
+                text_workflow=run_options.text_workflow,
                 translation_group_segments=run_options.translation_group_segments,
                 max_translation_group_pause_seconds=(
                     run_options.max_translation_group_pause_seconds

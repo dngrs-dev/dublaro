@@ -152,6 +152,7 @@ class DubConfig(BaseModel):
 
     source_language: str | None = None
     target_language: str | None = None
+    text_workflow: str | None = None
     output_path: Path | None = None
     output_dir: Path | None = None
     workspace_dir: Path | None = None

@@ -58,6 +58,7 @@ class DubbingAdaptersManifest(BaseModel):
     diarization: AdapterManifest | None = None
     translation: AdapterManifest
     text_adapter: AdapterManifest
+    dubbing_script: AdapterManifest | None = None
     tts: AdapterManifest
     speaker_voices: dict[str, SpeakerVoiceManifest] = Field(default_factory=dict)
 
@@ -88,6 +89,7 @@ class DubbingOptionsManifest(BaseModel):
     max_translation_group_duration_seconds: float
     max_translation_sentence_group_duration_seconds: float
     export_srt: bool
+    text_workflow: str
     srt_text_mode: str
     subtitle_embed: str
     ffmpeg_executable: str
@@ -146,6 +148,7 @@ def build_dubbing_manifest(
     diarization_adapter: object | None = None,
     translation_adapter: object,
     text_adapter: object,
+    dubbing_script_adapter: object | None = None,
     tts_adapter: object,
     speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     options: DubbingOptionsManifest,
@@ -171,6 +174,11 @@ def build_dubbing_manifest(
             ),
             translation=describe_adapter(translation_adapter),
             text_adapter=describe_adapter(text_adapter),
+            dubbing_script=(
+                describe_adapter(dubbing_script_adapter)
+                if dubbing_script_adapter is not None
+                else None
+            ),
             tts=describe_adapter(tts_adapter),
             speaker_voices={
                 speaker_id: describe_speaker_voice(speaker_voice)

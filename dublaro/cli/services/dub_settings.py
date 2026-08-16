@@ -8,6 +8,7 @@ from dublaro.cli_config import (
     resolve_dub_settings,
 )
 from dublaro.config import load_config
+from dublaro.pipeline.dub_plan import TextWorkflowMode
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
 
@@ -15,6 +16,7 @@ from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 class DubCommandOverrides:
     source_language: str | None = None
     target_language: str | None = None
+    text_workflow: str | None = None
     output_path: Path | None = None
     output_dir: Path | None = None
     workspace_dir: Path | None = None
@@ -80,6 +82,7 @@ class DubCommandOverrides:
         return DubCliOverrides(
             source_language=self.source_language,
             target_language=self.target_language,
+            text_workflow=self.text_workflow,
             output_path=self.output_path,
             output_dir=self.output_dir,
             workspace_dir=self.workspace_dir,
@@ -152,6 +155,7 @@ class DubCommandOverrides:
 @dataclass(frozen=True)
 class ResolvedDubCommandSettings:
     settings: ResolvedDubSettings
+    text_workflow: TextWorkflowMode
     srt_text_mode: SrtTextMode
     subtitle_embed: SubtitleEmbedMode
 
@@ -168,12 +172,13 @@ def resolve_dub_command_settings(
         loaded_config=loaded_config,
         overrides=overrides.to_cli_overrides(),
     )
-    parsed_srt_text_mode, parsed_subtitle_embed = validate_resolved_dub_settings(
-        settings
+    parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed = (
+        validate_resolved_dub_settings(settings)
     )
 
     return ResolvedDubCommandSettings(
         settings=settings,
+        text_workflow=parsed_text_workflow,
         srt_text_mode=parsed_srt_text_mode,
         subtitle_embed=parsed_subtitle_embed,
     )
