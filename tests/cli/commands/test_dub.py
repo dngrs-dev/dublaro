@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from dublaro.adapters.diarization import FakeDiarizationAdapter
+from dublaro.adapters.source_separation import FakeSourceSeparationAdapter
 from typer.testing import CliRunner
 
 cli = import_module("dublaro.cli.app")
@@ -53,6 +54,8 @@ def test_dub_command_runs_full_pipeline(
         diarization_min_speakers: int | None = None,
         diarization_max_speakers: int | None = None,
         dubbing_script_adapter: object | None = None,
+        source_separation_adapter: object | None = None,
+        background_mode: str = "speech-only",
         translation_group_segments: bool = True,
         max_translation_group_pause_seconds: float = 0.8,
         max_translation_group_duration_seconds: float = 12.0,
@@ -97,6 +100,8 @@ def test_dub_command_runs_full_pipeline(
                 "diarization_min_speakers": diarization_min_speakers,
                 "diarization_max_speakers": diarization_max_speakers,
                 "dubbing_script_adapter": dubbing_script_adapter,
+                "source_separation_adapter": source_separation_adapter,
+                "background_mode": background_mode,
                 "translation_group_segments": translation_group_segments,
                 "max_translation_group_pause_seconds": max_translation_group_pause_seconds,
                 "max_translation_group_duration_seconds": max_translation_group_duration_seconds,
@@ -203,6 +208,8 @@ def test_dub_command_runs_full_pipeline(
             "diarization_min_speakers": None,
             "diarization_max_speakers": None,
             "dubbing_script_adapter": None,
+            "source_separation_adapter": None,
+            "background_mode": "ducked",
             "translation_group_segments": True,
             "max_translation_group_pause_seconds": 0.8,
             "max_translation_group_duration_seconds": 12.0,
@@ -853,3 +860,63 @@ def test_dub_command_passes_text_workflow(
     assert result.exit_code == 0
     assert calls[0]["text_workflow"] == "llm-dubbing"
     assert calls[0]["dubbing_script_adapter"] is not None
+
+
+def test_dub_command_passes_source_separation_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, tmp_path / "workspace")
+
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--background-mode",
+            "separated",
+            "--source-separation",
+            "fake",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0]["video_path"] == video_path
+    assert calls[0]["output_path"] == output_path
+    assert calls[0]["background_mode"] == "separated"
+    assert calls[0]["mix_original_audio"] is True
+
+    source_separation_adapter = calls[0]["source_separation_adapter"]
+
+    assert isinstance(source_separation_adapter, FakeSourceSeparationAdapter)
+    assert source_separation_adapter.name == "fake-source-separation"

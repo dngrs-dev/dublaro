@@ -37,6 +37,7 @@ from dublaro.pipeline.resume import (
     load_reusable_transcript,
     reusable_file,
 )
+from dublaro.pipeline.separate import separate_background_audio
 from dublaro.pipeline.subtitles import save_srt
 from dublaro.pipeline.synthesize import synthesize_transcript_speech
 from dublaro.pipeline.timing_repair import repair_overlong_speech_segments
@@ -56,6 +57,7 @@ DubbingProgressStep = Literal[
     "fit_speech",
     "fit_video",
     "align_speech",
+    "separate_background",
     "mix_original_audio",
     "export_video",
     "export_srt",
@@ -114,6 +116,9 @@ class ExportAudioResult:
     mix_original_audio_path: Path | None = None
     mixed_audio_path: Path | None = None
     video_fitted_original_audio_path: Path | None = None
+    separated_background_audio_path: Path | None = None
+    separated_voice_audio_path: Path | None = None
+    video_fitted_background_audio_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +146,9 @@ class ManifestInputs:
     video_fitted_transcript_path: Path | None
     fitted_video_path: Path | None
     video_fitted_original_audio_path: Path | None
+    separated_background_audio_path: Path | None
+    separated_voice_audio_path: Path | None
+    video_fitted_background_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
@@ -697,6 +705,132 @@ def _align_speech_track(
         )
 
 
+@dataclass(frozen=True)
+class BackgroundAudioResult:
+    audio_path: Path
+    ducking_gain: float
+    mix_original_audio_path: Path
+    separated_background_audio_path: Path | None = None
+    separated_voice_audio_path: Path | None = None
+    video_fitted_original_audio_path: Path | None = None
+    video_fitted_background_audio_path: Path | None = None
+
+
+def _prepare_background_audio_for_mix(
+    context: DubRunContext,
+    *,
+    video_slowdown_factor: float,
+) -> BackgroundAudioResult | None:
+    if context.options.background_mode == "speech-only":
+        return None
+
+    original_mix_path = context.artifact_paths.mix_original_audio_path
+
+    if context.options.resume and reusable_file(original_mix_path):
+        _progress_skipped(
+            context.progress_callback,
+            "mix_original_audio",
+            f"Using existing original mix audio: {original_mix_path}.",
+        )
+    else:
+        extract_audio_from_video(
+            context.paths.video_path,
+            original_mix_path,
+            sample_rate=context.options.speech_sample_rate,
+            channels=1,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
+        )
+
+    background_audio_path = original_mix_path
+    separated_background_audio_path = None
+    separated_voice_audio_path = None
+
+    if context.options.background_mode == "separated":
+        if context.adapters.source_separation is None:
+            raise ValueError(
+                "source_separation_adapter is required when background_mode is separated."
+            )
+
+        separated_background_audio_path = (
+            context.artifact_paths.separated_background_audio_path
+        )
+        separated_voice_audio_path = context.artifact_paths.separated_voice_audio_path
+
+        if context.options.resume and reusable_file(separated_background_audio_path):
+            _progress_skipped(
+                context.progress_callback,
+                "separate_background",
+                f"Using existing separated background: {separated_background_audio_path}.",
+            )
+            background_audio_path = separated_background_audio_path
+        else:
+            with _progress_stage(
+                context.progress_callback,
+                "separate_background",
+                "Separating original voice from background audio.",
+            ):
+                separated = separate_background_audio(
+                    original_mix_path,
+                    adapter=context.adapters.source_separation,
+                    background_output_path=separated_background_audio_path,
+                    voice_output_path=separated_voice_audio_path,
+                    sample_rate=context.options.speech_sample_rate,
+                    overwrite=context.options.overwrite,
+                )
+                background_audio_path = separated.background_audio_path
+                separated_background_audio_path = separated.background_audio_path
+                separated_voice_audio_path = separated.voice_audio_path
+
+    ducking_gain = (
+        context.options.ducking_gain
+        if context.options.background_mode == "ducked"
+        else context.options.original_audio_gain
+    )
+
+    video_fitted_original_audio_path = None
+    video_fitted_background_audio_path = None
+
+    if video_slowdown_factor > 1.0:
+        video_fitted_path = (
+            context.artifact_paths.video_fitted_background_audio_path
+            if context.options.background_mode == "separated"
+            else context.artifact_paths.video_fitted_original_audio_path
+        )
+
+        if context.options.resume and reusable_file(video_fitted_path):
+            _progress_skipped(
+                context.progress_callback,
+                "mix_original_audio",
+                f"Using existing video-fitted background audio: {video_fitted_path}.",
+            )
+            background_audio_path = video_fitted_path
+        else:
+            background_audio_path = change_audio_tempo(
+                background_audio_path,
+                video_fitted_path,
+                tempo_factor=1.0 / video_slowdown_factor,
+                sample_rate=context.options.speech_sample_rate,
+                overwrite=context.options.overwrite,
+                executable=context.options.ffmpeg_executable,
+            )
+
+        if context.options.background_mode == "separated":
+            video_fitted_background_audio_path = video_fitted_path
+        else:
+            video_fitted_original_audio_path = video_fitted_path
+
+    return BackgroundAudioResult(
+        audio_path=background_audio_path,
+        ducking_gain=ducking_gain,
+        mix_original_audio_path=original_mix_path,
+        separated_background_audio_path=separated_background_audio_path,
+        separated_voice_audio_path=separated_voice_audio_path,
+        video_fitted_original_audio_path=video_fitted_original_audio_path,
+        video_fitted_background_audio_path=video_fitted_background_audio_path,
+    )
+
+
 def _prepare_audio_for_export(
     context: DubRunContext,
     speech_timeline_transcript: Transcript,
@@ -704,17 +838,10 @@ def _prepare_audio_for_export(
     *,
     video_slowdown_factor: float = 1.0,
 ) -> ExportAudioResult:
-    if not context.options.mix_original_audio:
+    if context.options.background_mode == "speech-only":
         return ExportAudioResult(audio_path=speech_track_path)
 
-    original_mix_path = context.artifact_paths.mix_original_audio_path
     mixed_path = context.artifact_paths.mixed_audio_path
-
-    video_fitted_original_audio_path = (
-        context.artifact_paths.video_fitted_original_audio_path
-        if video_slowdown_factor > 1.0
-        else None
-    )
 
     if context.options.resume and reusable_file(mixed_path):
         _progress_skipped(
@@ -722,64 +849,55 @@ def _prepare_audio_for_export(
             "mix_original_audio",
             f"Using existing mixed audio: {mixed_path}.",
         )
+
+        def existing(path: Path) -> Path | None:
+            return path if reusable_file(path) else None
+
         return ExportAudioResult(
             audio_path=mixed_path,
-            mix_original_audio_path=original_mix_path,
+            mix_original_audio_path=existing(
+                context.artifact_paths.mix_original_audio_path
+            ),
             mixed_audio_path=mixed_path,
-            video_fitted_original_audio_path=video_fitted_original_audio_path,
+            video_fitted_original_audio_path=existing(
+                context.artifact_paths.video_fitted_original_audio_path
+            ),
+            separated_background_audio_path=(
+                existing(context.artifact_paths.separated_background_audio_path)
+                if context.options.background_mode == "separated"
+                else None
+            ),
+            separated_voice_audio_path=(
+                existing(context.artifact_paths.separated_voice_audio_path)
+                if context.options.background_mode == "separated"
+                else None
+            ),
+            video_fitted_background_audio_path=(
+                existing(context.artifact_paths.video_fitted_background_audio_path)
+                if context.options.background_mode == "separated"
+                else None
+            ),
         )
+
+    background_audio = _prepare_background_audio_for_mix(
+        context,
+        video_slowdown_factor=video_slowdown_factor,
+    )
+    if background_audio is None:
+        return ExportAudioResult(audio_path=speech_track_path)
 
     with _progress_stage(
         context.progress_callback,
         "mix_original_audio",
-        "Mixing dubbed speech over original audio.",
+        "Mixing dubbed speech over background audio.",
     ):
-        original_audio_for_mix_path = original_mix_path
-
-        if context.options.resume and reusable_file(original_mix_path):
-            _progress_skipped(
-                context.progress_callback,
-                "mix_original_audio",
-                f"Using existing original mix audio: {original_mix_path}.",
-            )
-        else:
-            original_audio_for_mix_path = extract_audio_from_video(
-                context.paths.video_path,
-                original_mix_path,
-                sample_rate=context.options.speech_sample_rate,
-                channels=1,
-                overwrite=context.options.overwrite,
-                executable=context.options.ffmpeg_executable,
-            )
-
-        if video_fitted_original_audio_path is not None:
-            if context.options.resume and reusable_file(
-                video_fitted_original_audio_path
-            ):
-                _progress_skipped(
-                    context.progress_callback,
-                    "mix_original_audio",
-                    f"Using existing video-fitted original audio: "
-                    f"{video_fitted_original_audio_path}.",
-                )
-                original_audio_for_mix_path = video_fitted_original_audio_path
-            else:
-                original_audio_for_mix_path = change_audio_tempo(
-                    original_audio_for_mix_path,
-                    video_fitted_original_audio_path,
-                    tempo_factor=1.0 / video_slowdown_factor,
-                    sample_rate=context.options.speech_sample_rate,
-                    overwrite=context.options.overwrite,
-                    executable=context.options.ffmpeg_executable,
-                )
-
         mixed_audio_path = mix_original_audio_with_dubbed_speech(
             speech_timeline_transcript,
-            original_audio_path=original_audio_for_mix_path,
+            original_audio_path=background_audio.audio_path,
             speech_track_path=speech_track_path,
             output_path=mixed_path,
             original_gain=context.options.original_audio_gain,
-            ducking_gain=context.options.ducking_gain,
+            ducking_gain=background_audio.ducking_gain,
             speech_gain=context.options.speech_gain,
             ducking_margin_seconds=context.options.ducking_margin_seconds,
             ducking_fade_seconds=context.options.ducking_fade_seconds,
@@ -787,9 +905,18 @@ def _prepare_audio_for_export(
 
         return ExportAudioResult(
             audio_path=mixed_audio_path,
-            mix_original_audio_path=original_mix_path,
+            mix_original_audio_path=background_audio.mix_original_audio_path,
             mixed_audio_path=mixed_audio_path,
-            video_fitted_original_audio_path=video_fitted_original_audio_path,
+            video_fitted_original_audio_path=(
+                background_audio.video_fitted_original_audio_path
+            ),
+            separated_background_audio_path=(
+                background_audio.separated_background_audio_path
+            ),
+            separated_voice_audio_path=background_audio.separated_voice_audio_path,
+            video_fitted_background_audio_path=(
+                background_audio.video_fitted_background_audio_path
+            ),
         )
 
 
@@ -880,6 +1007,7 @@ def _write_manifest(
             translation_adapter=adapters.translation,
             text_adapter=adapters.text_adapter,
             dubbing_script_adapter=adapters.dubbing_script,
+            source_separation_adapter=adapters.source_separation,
             tts_adapter=adapters.tts,
             speaker_voices=adapters.speaker_voices,
             options=DubbingOptionsManifest(
@@ -897,6 +1025,7 @@ def _write_manifest(
                 fit_video=run_options.fit_video,
                 max_video_slowdown=run_options.max_video_slowdown,
                 mix_original_audio=run_options.mix_original_audio,
+                background_mode=run_options.background_mode,
                 original_audio_gain=run_options.original_audio_gain,
                 ducking_gain=run_options.ducking_gain,
                 speech_gain=run_options.speech_gain,
@@ -968,6 +1097,21 @@ def _write_manifest(
                 video_fitted_original_audio_path=(
                     str(inputs.video_fitted_original_audio_path)
                     if inputs.video_fitted_original_audio_path is not None
+                    else None
+                ),
+                separated_background_audio_path=(
+                    str(inputs.separated_background_audio_path)
+                    if inputs.separated_background_audio_path is not None
+                    else None
+                ),
+                separated_voice_audio_path=(
+                    str(inputs.separated_voice_audio_path)
+                    if inputs.separated_voice_audio_path is not None
+                    else None
+                ),
+                video_fitted_background_audio_path=(
+                    str(inputs.video_fitted_background_audio_path)
+                    if inputs.video_fitted_background_audio_path is not None
                     else None
                 ),
                 mix_original_audio_path=(

@@ -12,6 +12,10 @@ from dublaro.adapters.dubbing_script import (
     DubbingScriptAdapter,
     OllamaDubbingScriptAdapter,
 )
+from dublaro.adapters.source_separation import (
+    FakeSourceSeparationAdapter,
+    SourceSeparationAdapter,
+)
 from dublaro.adapters.text_adapter import (
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_TEMPERATURE,
@@ -256,3 +260,10 @@ def create_speaker_voice_preflight_settings(
         )
         for speaker_id, profile in profiles.items()
     }
+
+
+def create_source_separation_adapter(backend: str) -> SourceSeparationAdapter:
+    if backend == "fake":
+        return FakeSourceSeparationAdapter()
+
+    raise typer.BadParameter("Source separation backend must be 'fake'.")

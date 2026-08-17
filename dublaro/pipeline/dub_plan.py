@@ -6,6 +6,7 @@ from typing import Literal
 from dublaro.adapters.asr import AsrAdapter
 from dublaro.adapters.diarization import DiarizationAdapter
 from dublaro.adapters.dubbing_script import DubbingScriptAdapter
+from dublaro.adapters.source_separation import SourceSeparationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
@@ -13,6 +14,7 @@ from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
 
 TextWorkflowMode = Literal["translate-then-adapt", "llm-dubbing"]
+BackgroundMode = Literal["speech-only", "original", "ducked", "separated"]
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,7 @@ class DubAdapters:
     dubbing_script: DubbingScriptAdapter | None = None
     diarization: DiarizationAdapter | None = None
     speaker_voices: Mapping[str, SpeakerVoice] | None = None
+    source_separation: SourceSeparationAdapter | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,7 @@ class DubOptions:
     source_language: str | None
     target_language: str
     text_workflow: TextWorkflowMode = "translate-then-adapt"
+    background_mode: BackgroundMode = "speech-only"
     asr_sample_rate: int = 16_000
     speech_sample_rate: int = 24_000
     repair_timing: bool = False
@@ -68,6 +72,17 @@ class DubOptions:
         if self.text_workflow not in {"translate-then-adapt", "llm-dubbing"}:
             raise ValueError(
                 "text_workflow must be 'translate-then-adapt' or 'llm-dubbing'"
+            )
+
+        if self.background_mode not in {
+            "speech-only",
+            "original",
+            "ducked",
+            "separated",
+        }:
+            raise ValueError(
+                "background_mode must be 'speech-only', 'original', 'ducked', "
+                "or 'separated'"
             )
 
         if self.max_timing_repair_attempts < 1:
@@ -112,6 +127,9 @@ class DubArtifactPaths:
     video_fitted_original_audio_path: Path
     mix_original_audio_path: Path
     mixed_audio_path: Path
+    separated_background_audio_path: Path
+    separated_voice_audio_path: Path
+    video_fitted_background_audio_path: Path
     srt_path: Path
     subtitle_embed_srt_path: Path
     manifest_path: Path
@@ -189,6 +207,13 @@ class DubPaths:
             ),
             mix_original_audio_path=self.workspace_dir / f"{stem}.original-mix.wav",
             mixed_audio_path=self.workspace_dir / f"{timing_stem}.mixed.wav",
+            separated_background_audio_path=self.workspace_dir
+            / f"{stem}.background.wav",
+            separated_voice_audio_path=self.workspace_dir / f"{stem}.voice.wav",
+            video_fitted_background_audio_path=(
+                self.workspace_dir
+                / f"{stem}.{options.target_language}.background-video-fitted.wav"
+            ),
             srt_path=options.srt_output_path or self.output_path.with_suffix(".srt"),
             subtitle_embed_srt_path=self.workspace_dir / f"{timing_stem}.embed.srt",
             manifest_path=(

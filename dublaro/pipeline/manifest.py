@@ -59,6 +59,7 @@ class DubbingAdaptersManifest(BaseModel):
     translation: AdapterManifest
     text_adapter: AdapterManifest
     dubbing_script: AdapterManifest | None = None
+    source_separation: AdapterManifest | None = None
     tts: AdapterManifest
     speaker_voices: dict[str, SpeakerVoiceManifest] = Field(default_factory=dict)
 
@@ -79,6 +80,7 @@ class DubbingOptionsManifest(BaseModel):
     fit_video: bool
     max_video_slowdown: float
     mix_original_audio: bool
+    background_mode: str
     original_audio_gain: float
     ducking_gain: float
     speech_gain: float
@@ -114,6 +116,9 @@ class DubbingArtifactsManifest(BaseModel):
     video_fitted_transcript_path: str | None = None
     fitted_video_path: str | None = None
     video_fitted_original_audio_path: str | None = None
+    separated_background_audio_path: str | None = None
+    separated_voice_audio_path: str | None = None
+    video_fitted_background_audio_path: str | None = None
     mix_original_audio_path: str | None = None
     mixed_audio_path: str | None = None
     srt_path: str | None = None
@@ -149,6 +154,7 @@ def build_dubbing_manifest(
     translation_adapter: object,
     text_adapter: object,
     dubbing_script_adapter: object | None = None,
+    source_separation_adapter: object | None = None,
     tts_adapter: object,
     speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     options: DubbingOptionsManifest,
@@ -184,6 +190,11 @@ def build_dubbing_manifest(
                 speaker_id: describe_speaker_voice(speaker_voice)
                 for speaker_id, speaker_voice in (speaker_voices or {}).items()
             },
+            source_separation=(
+                describe_adapter(source_separation_adapter)
+                if source_separation_adapter is not None
+                else None
+            ),
         ),
         options=options,
         artifacts=artifacts,

@@ -120,6 +120,12 @@ class FitVideoConfig(BaseModel):
     max_slowdown: float | None = Field(ge=1.0, default=None)
 
 
+class SourceSeparationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backend: str | None = None
+
+
 class MixConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -153,6 +159,7 @@ class DubConfig(BaseModel):
     source_language: str | None = None
     target_language: str | None = None
     text_workflow: str | None = None
+    background_mode: str | None = None
     output_path: Path | None = None
     output_dir: Path | None = None
     workspace_dir: Path | None = None
@@ -171,6 +178,7 @@ class DubConfig(BaseModel):
     timing_repair: TimingRepairConfig = TimingRepairConfig()
     fit_speech: FitSpeechConfig = FitSpeechConfig()
     fit_video: FitVideoConfig = FitVideoConfig()
+    source_separation: SourceSeparationConfig = SourceSeparationConfig()
     mix: MixConfig = MixConfig()
     srt: SrtConfig = SrtConfig()
     manifest: ManifestConfig = ManifestConfig()

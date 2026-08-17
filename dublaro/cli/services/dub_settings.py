@@ -8,7 +8,7 @@ from dublaro.cli_config import (
     resolve_dub_settings,
 )
 from dublaro.config import load_config
-from dublaro.pipeline.dub_plan import TextWorkflowMode
+from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
 
@@ -17,6 +17,7 @@ class DubCommandOverrides:
     source_language: str | None = None
     target_language: str | None = None
     text_workflow: str | None = None
+    background_mode: str | None = None
     output_path: Path | None = None
     output_dir: Path | None = None
     workspace_dir: Path | None = None
@@ -66,6 +67,7 @@ class DubCommandOverrides:
     fit_video_enabled: bool | None = None
     max_video_slowdown: float | None = None
     mix_original_audio_enabled: bool | None = None
+    source_separation_backend: str | None = None
     original_audio_gain: float | None = None
     ducking_gain: float | None = None
     speech_gain: float | None = None
@@ -83,6 +85,7 @@ class DubCommandOverrides:
             source_language=self.source_language,
             target_language=self.target_language,
             text_workflow=self.text_workflow,
+            background_mode=self.background_mode,
             output_path=self.output_path,
             output_dir=self.output_dir,
             workspace_dir=self.workspace_dir,
@@ -138,6 +141,7 @@ class DubCommandOverrides:
             fit_video=self.fit_video_enabled,
             max_video_slowdown=self.max_video_slowdown,
             mix_original_audio=self.mix_original_audio_enabled,
+            source_separation_backend=self.source_separation_backend,
             original_audio_gain=self.original_audio_gain,
             ducking_gain=self.ducking_gain,
             speech_gain=self.speech_gain,
@@ -156,6 +160,7 @@ class DubCommandOverrides:
 class ResolvedDubCommandSettings:
     settings: ResolvedDubSettings
     text_workflow: TextWorkflowMode
+    background_mode: BackgroundMode
     srt_text_mode: SrtTextMode
     subtitle_embed: SubtitleEmbedMode
 
@@ -172,13 +177,17 @@ def resolve_dub_command_settings(
         loaded_config=loaded_config,
         overrides=overrides.to_cli_overrides(),
     )
-    parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed = (
-        validate_resolved_dub_settings(settings)
-    )
+    (
+        parsed_text_workflow,
+        parsed_background_mode,
+        parsed_srt_text_mode,
+        parsed_subtitle_embed,
+    ) = validate_resolved_dub_settings(settings)
 
     return ResolvedDubCommandSettings(
         settings=settings,
         text_workflow=parsed_text_workflow,
+        background_mode=parsed_background_mode,
         srt_text_mode=parsed_srt_text_mode,
         subtitle_embed=parsed_subtitle_embed,
     )

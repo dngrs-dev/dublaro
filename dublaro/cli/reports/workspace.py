@@ -51,6 +51,9 @@ _MANIFEST_ARTIFACT_LABELS = {
     "video_fitted_transcript_path": ("transcript", "video-fitted transcript"),
     "fitted_video_path": ("video", "video-fitted video"),
     "video_fitted_original_audio_path": ("audio", "video-fitted original audio"),
+    "separated_background_audio_path": ("audio", "separated background audio"),
+    "separated_voice_audio_path": ("audio", "separated voice audio"),
+    "video_fitted_background_audio_path": ("audio", "video-fitted background audio"),
     "mix_original_audio_path": ("audio", "original audio for mixing"),
     "mixed_audio_path": ("audio", "mixed audio"),
     "srt_path": ("subtitle", "SRT subtitles"),
@@ -154,6 +157,25 @@ def _workspace_artifact(path: Path) -> WorkspaceArtifact | None:
 
     if name.endswith(".audio.wav"):
         return _build_artifact("audio", "extracted audio", path, "workspace")
+
+    if name.endswith(".background-video-fitted.wav"):
+        return _build_artifact(
+            "audio",
+            "video-fitted background audio",
+            path,
+            "workspace",
+        )
+
+    if name.endswith(".background.wav"):
+        return _build_artifact(
+            "audio",
+            "separated background audio",
+            path,
+            "workspace",
+        )
+
+    if name.endswith(".voice.wav"):
+        return _build_artifact("audio", "separated voice audio", path, "workspace")
 
     if name.endswith(".original-video-fitted.wav"):
         return _build_artifact(

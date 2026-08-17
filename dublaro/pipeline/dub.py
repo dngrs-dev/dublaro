@@ -6,10 +6,12 @@ from pathlib import Path
 from dublaro.adapters.asr import AsrAdapter
 from dublaro.adapters.diarization import DiarizationAdapter
 from dublaro.adapters.dubbing_script import DubbingScriptAdapter
+from dublaro.adapters.source_separation import SourceSeparationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
 from dublaro.pipeline.dub_plan import (
+    BackgroundMode,
     DubAdapters,
     DubOptions,
     DubPaths,
@@ -66,6 +68,9 @@ class DubbingArtifacts:
     video_fitted_transcript_path: Path | None
     fitted_video_path: Path | None
     video_fitted_original_audio_path: Path | None
+    separated_background_audio_path: Path | None
+    separated_voice_audio_path: Path | None
+    video_fitted_background_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
     srt_path: Path | None
@@ -87,6 +92,8 @@ def dub_video(
     dubbing_script_adapter: DubbingScriptAdapter | None = None,
     speaker_voices: Mapping[str, SpeakerVoice] | None = None,
     diarization_adapter: DiarizationAdapter | None = None,
+    source_separation_adapter: SourceSeparationAdapter | None = None,
+    background_mode: BackgroundMode = "speech-only",
     diarize: bool = False,
     diarization_min_speakers: int | None = None,
     diarization_max_speakers: int | None = None,
@@ -127,6 +134,14 @@ def dub_video(
         output_path=output_path,
         workspace_dir=workspace_dir,
     )
+    resolved_background_mode: BackgroundMode = (
+        "ducked"
+        if mix_original_audio and background_mode == "speech-only"
+        else background_mode
+    )
+    resolved_mix_original_audio = (
+        mix_original_audio or resolved_background_mode != "speech-only"
+    )
     options = DubOptions(
         source_language=source_language,
         target_language=target_language,
@@ -143,7 +158,8 @@ def dub_video(
         min_speech_overrun_seconds=min_speech_overrun_seconds,
         fit_video=fit_video,
         max_video_slowdown=max_video_slowdown,
-        mix_original_audio=mix_original_audio,
+        background_mode=resolved_background_mode,
+        mix_original_audio=resolved_mix_original_audio,
         original_audio_gain=original_audio_gain,
         ducking_gain=ducking_gain,
         speech_gain=speech_gain,
@@ -176,6 +192,7 @@ def dub_video(
         tts=tts_adapter,
         dubbing_script=dubbing_script_adapter,
         speaker_voices=speaker_voices,
+        source_separation=source_separation_adapter,
     )
 
     context = DubRunContext(
@@ -250,6 +267,10 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     mixed_audio_path = export_audio.mixed_audio_path
     video_fitted_original_audio_path = export_audio.video_fitted_original_audio_path
 
+    separated_background_audio_path = export_audio.separated_background_audio_path
+    separated_voice_audio_path = export_audio.separated_voice_audio_path
+    video_fitted_background_audio_path = export_audio.video_fitted_background_audio_path
+
     subtitle_export = _prepare_subtitles_for_export(
         context,
         speech_timeline_transcript,
@@ -283,6 +304,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         video_fitted_transcript_path=video_fitted_transcript_path,
         fitted_video_path=fitted_video_path,
         video_fitted_original_audio_path=video_fitted_original_audio_path,
+        separated_background_audio_path=separated_background_audio_path,
+        separated_voice_audio_path=separated_voice_audio_path,
+        video_fitted_background_audio_path=video_fitted_background_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,
@@ -313,6 +337,9 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         video_fitted_transcript_path=video_fitted_transcript_path,
         fitted_video_path=fitted_video_path,
         video_fitted_original_audio_path=video_fitted_original_audio_path,
+        separated_background_audio_path=separated_background_audio_path,
+        separated_voice_audio_path=separated_voice_audio_path,
+        video_fitted_background_audio_path=video_fitted_background_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
         srt_path=srt_path,

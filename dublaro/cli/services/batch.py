@@ -101,6 +101,8 @@ def run_batch_dubbing(
     config_path: Path | None,
     target_language: str | None,
     text_workflow: str | None,
+    background_mode: str | None,
+    source_separation_backend: str | None,
     output_dir: Path | None,
     source_language: str | None,
     workspace_root: Path | None,
@@ -163,6 +165,8 @@ def run_batch_dubbing(
                     source_language=source_language,
                     target_language=target_language,
                     text_workflow=text_workflow,
+                    background_mode=background_mode,
+                    source_separation_backend=source_separation_backend,
                     output_dir=job_output_dir,
                     workspace_dir=default_batch_workspace_dir(
                         input_path,
@@ -180,9 +184,12 @@ def run_batch_dubbing(
             )
             resolved_output_path = settings.output_path
 
-            parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed = (
-                validate_resolved_dub_settings(settings)
-            )
+            (
+                parsed_text_workflow,
+                parsed_background_mode,
+                parsed_srt_text_mode,
+                parsed_subtitle_embed,
+            ) = validate_resolved_dub_settings(settings)
 
             if on_job_started is not None:
                 on_job_started(
@@ -218,6 +225,7 @@ def run_batch_dubbing(
                 video_path,
                 settings,
                 parsed_text_workflow=parsed_text_workflow,
+                parsed_background_mode=parsed_background_mode,
                 parsed_srt_text_mode=parsed_srt_text_mode,
                 parsed_subtitle_embed=parsed_subtitle_embed,
                 progress_callback=on_dub_progress,

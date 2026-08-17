@@ -78,6 +78,8 @@ class DubCliOverrides:
     min_speech_overrun_seconds: float | None = None
     fit_video: bool | None = None
     max_video_slowdown: float | None = None
+    background_mode: str | None = None
+    source_separation_backend: str | None = None
     mix_original_audio: bool | None = None
     original_audio_gain: float | None = None
     ducking_gain: float | None = None
@@ -158,6 +160,8 @@ class ResolvedDubSettings:
     min_speech_overrun_seconds: float
     fit_video: bool
     max_video_slowdown: float
+    background_mode: str
+    source_separation_backend: str
     mix_original_audio: bool
     original_audio_gain: float
     ducking_gain: float
@@ -456,6 +460,21 @@ def resolve_dub_settings(
     )
     _validate_speaker_range(diarization_min_speakers, diarization_max_speakers)
 
+    mix_original_audio = _select(
+        overrides.mix_original_audio,
+        config.mix.enabled,
+        False,
+    )
+    background_mode = _select_optional(
+        overrides.background_mode,
+        config.background_mode,
+    )
+
+    if background_mode is None:
+        background_mode = "ducked" if mix_original_audio else "speech-only"
+    elif background_mode != "speech-only":
+        mix_original_audio = True
+
     return ResolvedDubSettings(
         source_language=_select_optional(
             overrides.source_language,
@@ -619,9 +638,13 @@ def resolve_dub_settings(
             config.fit_video.max_slowdown,
             1.5,
         ),
-        mix_original_audio=_select(
-            overrides.mix_original_audio, config.mix.enabled, False
+        background_mode=background_mode,
+        source_separation_backend=_select(
+            overrides.source_separation_backend,
+            config.source_separation.backend,
+            "fake",
         ),
+        mix_original_audio=mix_original_audio,
         original_audio_gain=_select(
             overrides.original_audio_gain,
             config.mix.original_audio_gain,

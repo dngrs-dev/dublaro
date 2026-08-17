@@ -51,6 +51,20 @@ def batch(
             help="Text workflow: translate-then-adapt or llm-dubbing.",
         ),
     ] = None,
+    background_mode: Annotated[
+        str | None,
+        typer.Option(
+            "--background-mode",
+            help="Background audio mode: speech-only, original, ducked, or separated.",
+        ),
+    ] = None,
+    source_separation_backend: Annotated[
+        str | None,
+        typer.Option(
+            "--source-separation",
+            help="Source separation backend used when --background-mode separated.",
+        ),
+    ] = None,
     output_dir: Annotated[
         Path | None,
         typer.Option(
@@ -151,6 +165,8 @@ def batch(
             config_path=config_path,
             target_language=target_language,
             text_workflow=text_workflow,
+            background_mode=background_mode,
+            source_separation_backend=source_separation_backend,
             output_dir=output_dir,
             source_language=source_language,
             workspace_root=workspace_root,

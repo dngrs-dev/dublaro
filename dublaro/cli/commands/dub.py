@@ -59,6 +59,13 @@ def dub(
             help="Text workflow: translate-then-adapt or llm-dubbing.",
         ),
     ] = None,
+    background_mode: Annotated[
+        str | None,
+        typer.Option(
+            "--background-mode",
+            help="Background audio mode: speech-only, original, ducked, or separated.",
+        ),
+    ] = None,
     output_path: Annotated[
         Path | None,
         typer.Option(
@@ -389,6 +396,13 @@ def dub(
             help="Mix dubbed speech over lowered original audio.",
         ),
     ] = None,
+    source_separation_backend: Annotated[
+        str | None,
+        typer.Option(
+            "--source-separation",
+            help="Source separation backend used when --background-mode separated.",
+        ),
+    ] = None,
     original_audio_gain: Annotated[
         float | None,
         typer.Option(
@@ -497,6 +511,7 @@ def dub(
                 source_language=source_language,
                 target_language=target_language,
                 text_workflow=text_workflow,
+                background_mode=background_mode,
                 output_path=output_path,
                 output_dir=output_dir,
                 workspace_dir=workspace_dir,
@@ -550,6 +565,7 @@ def dub(
                 fit_video_enabled=fit_video_enabled,
                 max_video_slowdown=max_video_slowdown,
                 mix_original_audio_enabled=mix_original_audio_enabled,
+                source_separation_backend=source_separation_backend,
                 original_audio_gain=original_audio_gain,
                 ducking_gain=ducking_gain,
                 speech_gain=speech_gain,
@@ -581,6 +597,7 @@ def dub(
             video_path,
             settings,
             parsed_text_workflow=resolved_dub.text_workflow,
+            parsed_background_mode=resolved_dub.background_mode,
             parsed_srt_text_mode=resolved_dub.srt_text_mode,
             parsed_subtitle_embed=resolved_dub.subtitle_embed,
             progress_callback=print_dub_progress,

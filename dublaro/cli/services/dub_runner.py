@@ -7,6 +7,7 @@ from dublaro.cli.services.adapter_factories import (
     create_asr_adapter,
     create_diarization_adapter,
     create_dubbing_script_adapter,
+    create_source_separation_adapter,
     create_speaker_voice_preflight_settings,
     create_speaker_voices,
     create_text_adapter,
@@ -19,7 +20,7 @@ from dublaro.pipeline.dub import (
     DubbingProgressCallback,
     dub_video,
 )
-from dublaro.pipeline.dub_plan import TextWorkflowMode
+from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
 from dublaro.pipeline.preflight import DubPreflightReport, validate_dub_preflight
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
@@ -33,6 +34,17 @@ def parse_text_workflow_mode(mode: str) -> TextWorkflowMode:
         )
 
     return cast(TextWorkflowMode, mode)
+
+
+def parse_background_mode(mode: str) -> BackgroundMode:
+    allowed_modes = {"speech-only", "original", "ducked", "separated"}
+
+    if mode not in allowed_modes:
+        raise typer.BadParameter(
+            "Background mode must be one of: speech-only, original, ducked, separated."
+        )
+
+    return cast(BackgroundMode, mode)
 
 
 def parse_srt_text_mode(text_mode: str) -> SrtTextMode:
@@ -57,8 +69,9 @@ def parse_subtitle_embed_mode(mode: str) -> SubtitleEmbedMode:
 
 def validate_resolved_dub_settings(
     settings: ResolvedDubSettings,
-) -> tuple[TextWorkflowMode, SrtTextMode, SubtitleEmbedMode]:
+) -> tuple[TextWorkflowMode, BackgroundMode, SrtTextMode, SubtitleEmbedMode]:
     parsed_text_workflow = parse_text_workflow_mode(settings.text_workflow)
+    parsed_background_mode = parse_background_mode(settings.background_mode)
     parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
     parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
 
@@ -85,7 +98,12 @@ def validate_resolved_dub_settings(
             "--max-speech-speedup."
         )
 
-    return parsed_text_workflow, parsed_srt_text_mode, parsed_subtitle_embed
+    return (
+        parsed_text_workflow,
+        parsed_background_mode,
+        parsed_srt_text_mode,
+        parsed_subtitle_embed,
+    )
 
 
 def run_dub_preflight(
@@ -128,6 +146,7 @@ def run_resolved_dub(
     settings: ResolvedDubSettings,
     *,
     parsed_text_workflow: TextWorkflowMode,
+    parsed_background_mode: BackgroundMode,
     parsed_srt_text_mode: SrtTextMode,
     parsed_subtitle_embed: SubtitleEmbedMode,
     progress_callback: DubbingProgressCallback | None,
@@ -141,6 +160,11 @@ def run_resolved_dub(
             ollama_temperature=settings.translation_ollama_temperature,
         )
         if parsed_text_workflow == "llm-dubbing"
+        else None
+    )
+    source_separation_adapter = (
+        create_source_separation_adapter(settings.source_separation_backend)
+        if parsed_background_mode == "separated"
         else None
     )
     return dub_video(
@@ -182,6 +206,8 @@ def run_resolved_dub(
         ),
         text_workflow=parsed_text_workflow,
         dubbing_script_adapter=dubbing_script_adapter,
+        source_separation_adapter=source_separation_adapter,
+        background_mode=parsed_background_mode,
         tts_adapter=create_tts_adapter(
             settings.tts_backend,
             piper_model_path=settings.piper_model_path,
