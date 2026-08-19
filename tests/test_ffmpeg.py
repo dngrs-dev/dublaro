@@ -8,6 +8,7 @@ from dublaro.audio.ffmpeg import (
     build_atempo_filter,
     change_audio_tempo,
     extract_audio_from_video,
+    normalize_audio_loudness,
     replace_video_audio,
     replace_video_audio_with_hard_subtitles,
     replace_video_audio_with_soft_subtitles,
@@ -305,6 +306,53 @@ def test_change_audio_tempo_uses_expected_ffmpeg_arguments(
     assert output_audio in args
 
 
+def test_normalize_audio_loudness_uses_expected_ffmpeg_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_audio = tmp_path / "speech.wav"
+    output_audio = tmp_path / "speech.normalized.wav"
+    input_audio.write_bytes(b"fake wav")
+
+    calls: list[tuple[list[str | Path], str]] = []
+
+    def fake_run_ffmpeg(
+        args: list[str | Path],
+        *,
+        executable: str = "ffmpeg",
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((args, executable))
+        return subprocess.CompletedProcess(args=[executable], returncode=0)
+
+    monkeypatch.setattr(ffmpeg, "run_ffmpeg", fake_run_ffmpeg)
+
+    result = normalize_audio_loudness(
+        input_audio,
+        output_audio,
+        target_lufs=-18.0,
+        true_peak=-2.0,
+        loudness_range=9.0,
+        sample_rate=24_000,
+        channels=1,
+        overwrite=True,
+        executable="ffmpeg-test",
+    )
+
+    assert result == output_audio
+
+    args, executable = calls[0]
+
+    assert executable == "ffmpeg-test"
+    assert "-filter:a" in args
+    assert "loudnorm=I=-18:TP=-2:LRA=9" in args
+    assert "-ac" in args
+    assert "1" in args
+    assert "-ar" in args
+    assert "24000" in args
+    assert "pcm_s16le" in args
+    assert output_audio in args
+
+
 def test_slow_video_uses_expected_ffmpeg_arguments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -349,3 +397,11 @@ def test_change_audio_tempo_rejects_in_place_output(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="in place"):
         change_audio_tempo(input_audio, input_audio, tempo_factor=1.2)
+
+
+def test_normalize_audio_loudness_rejects_in_place_output(tmp_path: Path) -> None:
+    input_audio = tmp_path / "speech.wav"
+    input_audio.write_bytes(b"fake wav")
+
+    with pytest.raises(ValueError, match="in place"):
+        normalize_audio_loudness(input_audio, input_audio)

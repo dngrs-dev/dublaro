@@ -100,6 +100,84 @@ def extract_audio_from_video(
     return output_file
 
 
+def normalize_audio_loudness(
+    input_path: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    target_lufs: float = -16.0,
+    true_peak: float = -1.5,
+    loudness_range: float = 11.0,
+    sample_rate: int | None = None,
+    channels: int | None = None,
+    overwrite: bool = False,
+    executable: str = "ffmpeg",
+) -> Path:
+    input_file = Path(input_path)
+
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input audio file does not exist: {input_file}")
+
+    if not input_file.is_file():
+        raise ValueError(f"Input audio path is not a file: {input_file}")
+
+    if target_lufs >= 0:
+        raise ValueError("target_lufs must be negative")
+
+    if true_peak > 0:
+        raise ValueError("true_peak must be <= 0")
+
+    if loudness_range <= 0:
+        raise ValueError("loudness_range must be > 0")
+
+    if sample_rate is not None and sample_rate <= 0:
+        raise ValueError("sample_rate must be > 0")
+
+    if channels is not None and channels <= 0:
+        raise ValueError("channels must be > 0")
+
+    output_file = (
+        Path(output_path)
+        if output_path is not None
+        else input_file.with_name(f"{input_file.stem}.normalized.wav")
+    )
+
+    if input_file.resolve() == output_file.resolve():
+        raise ValueError("Cannot normalize audio in place.")
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_file.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output file already exists: {output_file}. "
+            "Use overwrite=True to replace it."
+        )
+
+    overwrite_flag = "-y" if overwrite else "-n"
+
+    args: list[str | Path] = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        overwrite_flag,
+        "-i",
+        input_file,
+        "-filter:a",
+        (f"loudnorm=I={target_lufs:.6g}:TP={true_peak:.6g}:LRA={loudness_range:.6g}"),
+    ]
+
+    if channels is not None:
+        args.extend(["-ac", str(channels)])
+
+    if sample_rate is not None:
+        args.extend(["-ar", str(sample_rate)])
+
+    args.extend(["-acodec", "pcm_s16le", output_file])
+
+    run_ffmpeg(args, executable=executable)
+
+    return output_file
+
+
 def replace_video_audio_with_soft_subtitles(
     video_path: str | Path,
     audio_path: str | Path,

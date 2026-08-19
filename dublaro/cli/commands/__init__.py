@@ -12,6 +12,7 @@ from dublaro.cli.commands.extract_audio import extract_audio
 from dublaro.cli.commands.fit_speech import fit_speech
 from dublaro.cli.commands.inspect_workspace import inspect_workspace
 from dublaro.cli.commands.mix_audio import mix_audio
+from dublaro.cli.commands.normalize_audio import normalize_audio
 from dublaro.cli.commands.preview_repairs import preview_repairs
 from dublaro.cli.commands.preview_speakers import preview_speakers
 from dublaro.cli.commands.preview_timing import preview_timing
@@ -38,6 +39,7 @@ def register_commands(app: typer.Typer) -> None:
     app.command("fit-speech")(fit_speech)
     app.command("inspect-workspace")(inspect_workspace)
     app.command("mix-audio")(mix_audio)
+    app.command("normalize-audio")(normalize_audio)
     app.command("preview-repairs")(preview_repairs)
     app.command("preview-speakers")(preview_speakers)
     app.command("preview-timing")(preview_timing)
