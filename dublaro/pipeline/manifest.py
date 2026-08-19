@@ -21,6 +21,7 @@ _ADAPTER_SETTING_NAMES = (
     "model_path",
     "config_path",
     "executable",
+    "ffmpeg_executable",
     "speaker",
     "model_sample_rate",
     "model",

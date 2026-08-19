@@ -13,6 +13,7 @@ from dublaro.adapters.dubbing_script import (
     OllamaDubbingScriptAdapter,
 )
 from dublaro.adapters.source_separation import (
+    DemucsSourceSeparationAdapter,
     FakeSourceSeparationAdapter,
     SourceSeparationAdapter,
 )
@@ -266,4 +267,7 @@ def create_source_separation_adapter(backend: str) -> SourceSeparationAdapter:
     if backend == "fake":
         return FakeSourceSeparationAdapter()
 
-    raise typer.BadParameter("Source separation backend must be 'fake'.")
+    if backend == "demucs":
+        return DemucsSourceSeparationAdapter()
+
+    raise typer.BadParameter("Source separation backend must be 'fake' or 'demucs'.")

@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 from dublaro.adapters.diarization import FakeDiarizationAdapter
-from dublaro.adapters.source_separation import FakeSourceSeparationAdapter
+from dublaro.adapters.source_separation import (
+    DemucsSourceSeparationAdapter,
+    FakeSourceSeparationAdapter,
+)
 from typer.testing import CliRunner
 
 cli = import_module("dublaro.cli.app")
@@ -920,3 +923,63 @@ def test_dub_command_passes_source_separation_options(
 
     assert isinstance(source_separation_adapter, FakeSourceSeparationAdapter)
     assert source_separation_adapter.name == "fake-source-separation"
+
+
+def test_dub_command_passes_demucs_source_separation_adapter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, tmp_path / "workspace")
+
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--background-mode",
+            "separated",
+            "--source-separation",
+            "demucs",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0]["background_mode"] == "separated"
+    assert calls[0]["mix_original_audio"] is True
+
+    source_separation_adapter = calls[0]["source_separation_adapter"]
+
+    assert isinstance(source_separation_adapter, DemucsSourceSeparationAdapter)
+    assert source_separation_adapter.name == "demucs"
+    assert source_separation_adapter.executable == "demucs"
+    assert source_separation_adapter.model == "htdemucs"
