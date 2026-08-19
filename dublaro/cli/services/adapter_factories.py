@@ -263,11 +263,23 @@ def create_speaker_voice_preflight_settings(
     }
 
 
-def create_source_separation_adapter(backend: str) -> SourceSeparationAdapter:
+def create_source_separation_adapter(
+    backend: str,
+    *,
+    demucs_executable: str = "demucs",
+    demucs_model: str = "htdemucs",
+    demucs_device: str | None = None,
+    ffmpeg_executable: str = "ffmpeg",
+) -> SourceSeparationAdapter:
     if backend == "fake":
         return FakeSourceSeparationAdapter()
 
     if backend == "demucs":
-        return DemucsSourceSeparationAdapter()
+        return DemucsSourceSeparationAdapter(
+            executable=demucs_executable,
+            model=demucs_model,
+            device=demucs_device,
+            ffmpeg_executable=ffmpeg_executable,
+        )
 
     raise typer.BadParameter("Source separation backend must be 'fake' or 'demucs'.")
