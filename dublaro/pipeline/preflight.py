@@ -74,6 +74,8 @@ def validate_dub_preflight(
     translation_ollama_url: str = DEFAULT_OLLAMA_TRANSLATION_URL,
     translation_ollama_timeout_seconds: float = DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
     text_adapter_backend: str = "rules",
+    background_mode: str = "speech-only",
+    source_separation_backend: str = "fake",
     ollama_model: str = DEFAULT_OLLAMA_MODEL,
     ollama_url: str = DEFAULT_OLLAMA_URL,
     ollama_timeout_seconds: float = DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS,
@@ -119,6 +121,11 @@ def validate_dub_preflight(
         )
 
     _check_ffmpeg(issues, ffmpeg_executable)
+    _check_source_separation(
+        issues,
+        background_mode=background_mode,
+        source_separation_backend=source_separation_backend,
+    )
     checked_piper_executables: set[str] = set()
     _check_piper(
         issues,
@@ -299,6 +306,36 @@ def _check_ffmpeg(
             issues,
             "ffmpeg_failed",
             f"ffmpeg exists but failed to run: {details}",
+        )
+
+
+def _check_source_separation(
+    issues: list[PreflightIssue],
+    *,
+    background_mode: str,
+    source_separation_backend: str,
+) -> None:
+    if background_mode != "separated":
+        return
+
+    if source_separation_backend == "fake":
+        return
+
+    if source_separation_backend != "demucs":
+        _add_error(
+            issues,
+            "source_separation_backend_unknown",
+            f"Unknown source separation backend: {source_separation_backend}",
+            "Use --source-separation fake or --source-separation demucs.",
+        )
+        return
+
+    if shutil.which("demucs") is None:
+        _add_error(
+            issues,
+            "demucs_executable_missing",
+            "Demucs executable was not found: demucs",
+            'Install it with: pip install -e ".[source-separation]"',
         )
 
 

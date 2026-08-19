@@ -58,6 +58,53 @@ def test_dub_preflight_passes_for_fake_backends(
     assert report.issues == ()
 
 
+def test_dub_preflight_checks_demucs_when_separated_background(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_which(executable: str) -> str | None:
+        if executable == "ffmpeg":
+            return "C:/tools/ffmpeg.exe"
+
+        return None
+
+    monkeypatch.setattr(preflight_module.shutil, "which", fake_which)
+
+    def fake_run(
+        args: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(preflight_module.subprocess, "run", fake_run)
+
+    video_path = tmp_path / "input.mp4"
+    output_path = tmp_path / "output.mp4"
+    video_path.write_bytes(b"fake video")
+
+    report = validate_dub_preflight(
+        video_path=video_path,
+        output_path=output_path,
+        workspace_dir=tmp_path / "workspace",
+        overwrite=False,
+        ffmpeg_executable="ffmpeg",
+        asr_backend="fake",
+        translation_backend="fake",
+        source_language="en",
+        target_language="pl",
+        install_translation_package=False,
+        text_adapter_backend="rules",
+        background_mode="separated",
+        source_separation_backend="demucs",
+        tts_backend="fake",
+    )
+
+    assert {issue.code for issue in report.errors} == {"demucs_executable_missing"}
+
+
 def test_dub_preflight_reports_existing_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

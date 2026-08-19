@@ -125,6 +125,8 @@ def run_dub_preflight(
         translation_ollama_url=settings.translation_ollama_url,
         translation_ollama_timeout_seconds=settings.translation_ollama_timeout_seconds,
         text_adapter_backend=settings.text_adapter_backend,
+        background_mode=settings.background_mode,
+        source_separation_backend=settings.source_separation_backend,
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
         ollama_timeout_seconds=settings.ollama_timeout_seconds,

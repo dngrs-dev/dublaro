@@ -78,6 +78,7 @@ def build_doctor_report(
         source_language=source_language,
         target_language=target_language,
     )
+    _check_source_separation_configuration(checks, loaded_config)
     _check_cache_paths(checks, loaded_config)
 
     return DoctorReport(tuple(checks))
@@ -391,6 +392,64 @@ def _check_argos_package(
             message=f"No installed Argos package found for {source}->{target}.",
             hint="Enable install_package or install the Argos package manually.",
         )
+    )
+
+
+def _check_source_separation_configuration(
+    checks: list[DoctorCheck],
+    loaded_config: LoadedConfig,
+) -> None:
+    dub_config = loaded_config.config.dub
+    background_mode = dub_config.background_mode
+
+    if background_mode is None:
+        background_mode = (
+            "ducked" if (dub_config.mix.enabled or False) else "speech-only"
+        )
+
+    backend = dub_config.source_separation.backend or "fake"
+
+    if background_mode != "separated":
+        checks.append(
+            DoctorCheck(
+                category="source-separation",
+                name="source separation",
+                status="skipped",
+                message="Separated background mode is not configured.",
+            )
+        )
+        return
+
+    if backend == "fake":
+        checks.append(
+            DoctorCheck(
+                category="source-separation",
+                name="source separation",
+                status="skipped",
+                message="Fake source separation does not require external tools.",
+            )
+        )
+        return
+
+    if backend != "demucs":
+        checks.append(
+            DoctorCheck(
+                category="source-separation",
+                name="source separation",
+                status="error",
+                message=f"Unknown source separation backend: {backend}",
+                hint='Use backend = "fake" or backend = "demucs".',
+            )
+        )
+        return
+
+    _check_executable(
+        checks,
+        category="source-separation",
+        name="Demucs executable",
+        executable="demucs",
+        version_args=None,
+        missing_hint='Install it with: pip install -e ".[source-separation]"',
     )
 
 
