@@ -154,3 +154,27 @@ demucs_device = "cpu"
     assert loaded.config.dub.source_separation.demucs_executable == "demucs-custom"
     assert loaded.config.dub.source_separation.demucs_model == "mdx-extra"
     assert loaded.config.dub.source_separation.demucs_device == "cpu"
+
+
+def test_load_config_reads_audio_normalization_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+
+[dub.audio_normalization]
+normalize_final_audio = true
+target_final_lufs = -18.0
+final_true_peak = -2.0
+final_loudness_range = 9.0
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_config(config_path)
+
+    assert loaded.config.dub.audio_normalization.normalize_final_audio is True
+    assert loaded.config.dub.audio_normalization.target_final_lufs == -18.0
+    assert loaded.config.dub.audio_normalization.final_true_peak == -2.0
+    assert loaded.config.dub.audio_normalization.final_loudness_range == 9.0

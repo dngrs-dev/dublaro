@@ -118,6 +118,10 @@ def run_batch_dubbing(
     max_timing_repair_attempts: int | None,
     timing_repair_target_speedup: float | None,
     ffmpeg_executable: str | None,
+    normalize_final_audio: bool | None,
+    target_final_lufs: float | None,
+    final_true_peak: float | None,
+    final_loudness_range: float | None,
     overwrite: bool | None,
     on_batch_discovered: BatchDiscoveredCallback | None = None,
     on_job_started: BatchJobStartedCallback | None = None,
@@ -186,6 +190,10 @@ def run_batch_dubbing(
                     max_timing_repair_attempts=max_timing_repair_attempts,
                     timing_repair_target_speedup=timing_repair_target_speedup,
                     ffmpeg_executable=ffmpeg_executable,
+                    normalize_final_audio=normalize_final_audio,
+                    target_final_lufs=target_final_lufs,
+                    final_true_peak=final_true_peak,
+                    final_loudness_range=final_loudness_range,
                 ),
             )
             resolved_output_path = settings.output_path

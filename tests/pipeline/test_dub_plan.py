@@ -31,6 +31,9 @@ def test_dub_paths_builds_default_artifact_paths(tmp_path: Path) -> None:
     assert artifacts.speech_track_path == (
         tmp_path / "workspace" / "lesson.pl.speech-track.wav"
     )
+    assert artifacts.normalized_audio_path == (
+        tmp_path / "workspace" / "lesson.pl.normalized.wav"
+    )
     assert artifacts.srt_path == tmp_path / "lesson.pl.dubbed.srt"
     assert artifacts.manifest_path == (
         tmp_path / "workspace" / "lesson.pl.manifest.json"

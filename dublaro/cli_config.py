@@ -89,6 +89,10 @@ class DubCliOverrides:
     speech_gain: float | None = None
     ducking_margin_seconds: float | None = None
     ducking_fade_seconds: float | None = None
+    normalize_final_audio: bool | None = None
+    target_final_lufs: float | None = None
+    final_true_peak: float | None = None
+    final_loudness_range: float | None = None
     export_srt: bool | None = None
     srt_output_path: Path | None = None
     srt_text_mode: str | None = None
@@ -174,6 +178,10 @@ class ResolvedDubSettings:
     speech_gain: float
     ducking_margin_seconds: float
     ducking_fade_seconds: float
+    normalize_final_audio: bool
+    target_final_lufs: float
+    final_true_peak: float
+    final_loudness_range: float
     export_srt: bool
     srt_output_path: Path | None
     srt_text_mode: str
@@ -681,6 +689,26 @@ def resolve_dub_settings(
             overrides.ducking_fade_seconds,
             config.mix.ducking_fade_seconds,
             0.05,
+        ),
+        normalize_final_audio=_select(
+            overrides.normalize_final_audio,
+            config.audio_normalization.normalize_final_audio,
+            False,
+        ),
+        target_final_lufs=_select(
+            overrides.target_final_lufs,
+            config.audio_normalization.target_final_lufs,
+            -16.0,
+        ),
+        final_true_peak=_select(
+            overrides.final_true_peak,
+            config.audio_normalization.final_true_peak,
+            -1.5,
+        ),
+        final_loudness_range=_select(
+            overrides.final_loudness_range,
+            config.audio_normalization.final_loudness_range,
+            11.0,
         ),
         export_srt=_select(overrides.export_srt, config.srt.export, False),
         srt_output_path=_select_path(

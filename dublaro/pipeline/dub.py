@@ -29,6 +29,7 @@ from dublaro.pipeline.dub_stages import (
     _extract_audio,
     _fit_speech_to_timing,
     _fit_video_to_speech,
+    _normalize_audio_for_export,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
     _prepare_text_for_dubbing,
@@ -73,6 +74,7 @@ class DubbingArtifacts:
     video_fitted_background_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
+    normalized_audio_path: Path | None
     srt_path: Path | None
     embedded_srt_path: Path | None
     manifest_path: Path | None
@@ -113,6 +115,10 @@ def dub_video(
     speech_gain: float = 1.0,
     ducking_margin_seconds: float = 0.05,
     ducking_fade_seconds: float = 0.05,
+    normalize_final_audio: bool = False,
+    target_final_lufs: float = -16.0,
+    final_true_peak: float = -1.5,
+    final_loudness_range: float = 11.0,
     text_workflow: TextWorkflowMode = "translate-then-adapt",
     translation_group_segments: bool = True,
     max_translation_group_pause_seconds: float = 0.8,
@@ -165,6 +171,10 @@ def dub_video(
         speech_gain=speech_gain,
         ducking_margin_seconds=ducking_margin_seconds,
         ducking_fade_seconds=ducking_fade_seconds,
+        normalize_final_audio=normalize_final_audio,
+        target_final_lufs=target_final_lufs,
+        final_true_peak=final_true_peak,
+        final_loudness_range=final_loudness_range,
         text_workflow=text_workflow,
         translation_group_segments=translation_group_segments,
         max_translation_group_pause_seconds=max_translation_group_pause_seconds,
@@ -262,7 +272,12 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         speech_track_path,
         video_slowdown_factor=video_fit.slowdown_factor,
     )
-    audio_for_export_path = export_audio.audio_path
+    audio_normalization = _normalize_audio_for_export(
+        context,
+        export_audio.audio_path,
+    )
+    audio_for_export_path = audio_normalization.audio_path
+    normalized_audio_path = audio_normalization.normalized_audio_path
     mix_original_audio_path = export_audio.mix_original_audio_path
     mixed_audio_path = export_audio.mixed_audio_path
     video_fitted_original_audio_path = export_audio.video_fitted_original_audio_path
@@ -309,6 +324,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         video_fitted_background_audio_path=video_fitted_background_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
+        normalized_audio_path=normalized_audio_path,
         srt_path=srt_path,
         embedded_srt_path=embedded_srt_path,
         source_transcript=source_transcript,
@@ -342,6 +358,7 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
         video_fitted_background_audio_path=video_fitted_background_audio_path,
         mix_original_audio_path=mix_original_audio_path,
         mixed_audio_path=mixed_audio_path,
+        normalized_audio_path=normalized_audio_path,
         srt_path=srt_path,
         embedded_srt_path=embedded_srt_path,
         manifest_path=manifest_path,

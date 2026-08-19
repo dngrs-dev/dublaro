@@ -56,6 +56,7 @@ _MANIFEST_ARTIFACT_LABELS = {
     "video_fitted_background_audio_path": ("audio", "video-fitted background audio"),
     "mix_original_audio_path": ("audio", "original audio for mixing"),
     "mixed_audio_path": ("audio", "mixed audio"),
+    "normalized_audio_path": ("audio", "normalized final audio"),
     "srt_path": ("subtitle", "SRT subtitles"),
     "embedded_srt_path": ("subtitle", "embedded subtitle source"),
     "manifest_path": ("manifest", "manifest"),
@@ -190,6 +191,9 @@ def _workspace_artifact(path: Path) -> WorkspaceArtifact | None:
 
     if name.endswith(".mixed.wav"):
         return _build_artifact("audio", "mixed audio", path, "workspace")
+
+    if name.endswith(".normalized.wav"):
+        return _build_artifact("audio", "normalized final audio", path, "workspace")
 
     if name.endswith(".speech-track.wav"):
         return _build_artifact("audio", "speech track", path, "workspace")

@@ -76,6 +76,10 @@ class DubCommandOverrides:
     speech_gain: float | None = None
     ducking_margin_seconds: float | None = None
     ducking_fade_seconds: float | None = None
+    normalize_final_audio: bool | None = None
+    target_final_lufs: float | None = None
+    final_true_peak: float | None = None
+    final_loudness_range: float | None = None
     export_srt_enabled: bool | None = None
     srt_output_path: Path | None = None
     srt_text_mode: str | None = None
@@ -153,6 +157,10 @@ class DubCommandOverrides:
             speech_gain=self.speech_gain,
             ducking_margin_seconds=self.ducking_margin_seconds,
             ducking_fade_seconds=self.ducking_fade_seconds,
+            normalize_final_audio=self.normalize_final_audio,
+            target_final_lufs=self.target_final_lufs,
+            final_true_peak=self.final_true_peak,
+            final_loudness_range=self.final_loudness_range,
             export_srt=self.export_srt_enabled,
             srt_output_path=self.srt_output_path,
             srt_text_mode=self.srt_text_mode,

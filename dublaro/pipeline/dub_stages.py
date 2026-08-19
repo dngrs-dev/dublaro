@@ -10,6 +10,7 @@ from dublaro.adapters.diarization import DiarizationOptions
 from dublaro.audio.ffmpeg import (
     change_audio_tempo,
     extract_audio_from_video,
+    normalize_audio_loudness,
     slow_video,
 )
 from dublaro.pipeline.adapt_text import adapt_transcript_text
@@ -59,6 +60,7 @@ DubbingProgressStep = Literal[
     "align_speech",
     "separate_background",
     "mix_original_audio",
+    "normalize_audio",
     "export_video",
     "export_srt",
     "write_manifest",
@@ -122,6 +124,12 @@ class ExportAudioResult:
 
 
 @dataclass(frozen=True)
+class AudioNormalizationResult:
+    audio_path: Path
+    normalized_audio_path: Path | None = None
+
+
+@dataclass(frozen=True)
 class SubtitleExportResult:
     sidecar_srt_path: Path | None = None
     embedded_srt_path: Path | None = None
@@ -151,6 +159,7 @@ class ManifestInputs:
     video_fitted_background_audio_path: Path | None
     mix_original_audio_path: Path | None
     mixed_audio_path: Path | None
+    normalized_audio_path: Path | None
     srt_path: Path | None
     embedded_srt_path: Path | None
     source_transcript: Transcript
@@ -920,6 +929,49 @@ def _prepare_audio_for_export(
         )
 
 
+def _normalize_audio_for_export(
+    context: DubRunContext,
+    audio_path: Path,
+) -> AudioNormalizationResult:
+    if not context.options.normalize_final_audio:
+        return AudioNormalizationResult(audio_path=audio_path)
+
+    normalized_path = context.artifact_paths.normalized_audio_path
+
+    if context.options.resume and reusable_file(normalized_path):
+        _progress_skipped(
+            context.progress_callback,
+            "normalize_audio",
+            f"Using existing normalized audio: {normalized_path}.",
+        )
+        return AudioNormalizationResult(
+            audio_path=normalized_path,
+            normalized_audio_path=normalized_path,
+        )
+
+    with _progress_stage(
+        context.progress_callback,
+        "normalize_audio",
+        "Normalizing final audio loudness.",
+    ):
+        saved_path = normalize_audio_loudness(
+            audio_path,
+            normalized_path,
+            target_lufs=context.options.target_final_lufs,
+            true_peak=context.options.final_true_peak,
+            loudness_range=context.options.final_loudness_range,
+            sample_rate=context.options.speech_sample_rate,
+            channels=1,
+            overwrite=context.options.overwrite,
+            executable=context.options.ffmpeg_executable,
+        )
+
+    return AudioNormalizationResult(
+        audio_path=saved_path,
+        normalized_audio_path=saved_path,
+    )
+
+
 def _export_video(
     context: DubRunContext,
     video_for_export_path: Path,
@@ -1031,6 +1083,10 @@ def _write_manifest(
                 speech_gain=run_options.speech_gain,
                 ducking_margin_seconds=run_options.ducking_margin_seconds,
                 ducking_fade_seconds=run_options.ducking_fade_seconds,
+                normalize_final_audio=run_options.normalize_final_audio,
+                target_final_lufs=run_options.target_final_lufs,
+                final_true_peak=run_options.final_true_peak,
+                final_loudness_range=run_options.final_loudness_range,
                 text_workflow=run_options.text_workflow,
                 translation_group_segments=run_options.translation_group_segments,
                 max_translation_group_pause_seconds=(
@@ -1122,6 +1178,11 @@ def _write_manifest(
                 mixed_audio_path=(
                     str(inputs.mixed_audio_path)
                     if inputs.mixed_audio_path is not None
+                    else None
+                ),
+                normalized_audio_path=(
+                    str(inputs.normalized_audio_path)
+                    if inputs.normalized_audio_path is not None
                     else None
                 ),
                 srt_path=str(inputs.srt_path) if inputs.srt_path is not None else None,

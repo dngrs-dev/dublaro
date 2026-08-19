@@ -171,6 +171,34 @@ def batch(
             help="ffmpeg executable name or path.",
         ),
     ] = None,
+    normalize_final_audio: Annotated[
+        bool | None,
+        typer.Option(
+            "--normalize-final-audio/--no-normalize-final-audio",
+            help="Normalize final audio loudness before exporting each video.",
+        ),
+    ] = None,
+    target_final_lufs: Annotated[
+        float | None,
+        typer.Option(
+            "--target-final-lufs",
+            help="Target final audio loudness in LUFS.",
+        ),
+    ] = None,
+    final_true_peak: Annotated[
+        float | None,
+        typer.Option(
+            "--final-true-peak",
+            help="Target final audio true peak in dBTP.",
+        ),
+    ] = None,
+    final_loudness_range: Annotated[
+        float | None,
+        typer.Option(
+            "--final-loudness-range",
+            help="Target final audio loudness range.",
+        ),
+    ] = None,
     overwrite: Annotated[
         bool | None,
         typer.Option(
@@ -203,6 +231,10 @@ def batch(
             max_timing_repair_attempts=max_timing_repair_attempts,
             timing_repair_target_speedup=timing_repair_target_speedup,
             ffmpeg_executable=ffmpeg_executable,
+            normalize_final_audio=normalize_final_audio,
+            target_final_lufs=target_final_lufs,
+            final_true_peak=final_true_peak,
+            final_loudness_range=final_loudness_range,
             overwrite=overwrite,
             on_batch_discovered=print_batch_discovered,
             on_job_started=print_batch_job_started,

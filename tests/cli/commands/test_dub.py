@@ -79,6 +79,10 @@ def test_dub_command_runs_full_pipeline(
         speech_gain: float = 1.0,
         ducking_margin_seconds: float = 0.05,
         ducking_fade_seconds: float = 0.05,
+        normalize_final_audio: bool = False,
+        target_final_lufs: float = -16.0,
+        final_true_peak: float = -1.5,
+        final_loudness_range: float = 11.0,
         export_srt: bool = False,
         srt_output_path: Path | None = None,
         srt_text_mode: str = "adapted",
@@ -125,6 +129,10 @@ def test_dub_command_runs_full_pipeline(
                 "speech_gain": speech_gain,
                 "ducking_margin_seconds": ducking_margin_seconds,
                 "ducking_fade_seconds": ducking_fade_seconds,
+                "normalize_final_audio": normalize_final_audio,
+                "target_final_lufs": target_final_lufs,
+                "final_true_peak": final_true_peak,
+                "final_loudness_range": final_loudness_range,
                 "export_srt": export_srt,
                 "srt_output_path": srt_output_path,
                 "srt_text_mode": srt_text_mode,
@@ -233,6 +241,10 @@ def test_dub_command_runs_full_pipeline(
             "speech_gain": 1.1,
             "ducking_margin_seconds": 0.2,
             "ducking_fade_seconds": 0.03,
+            "normalize_final_audio": False,
+            "target_final_lufs": -16.0,
+            "final_true_peak": -1.5,
+            "final_loudness_range": 11.0,
             "export_srt": True,
             "srt_output_path": tmp_path / "video.pl.srt",
             "srt_text_mode": "adapted",
@@ -990,3 +1002,62 @@ def test_dub_command_passes_demucs_source_separation_adapter(
     assert source_separation_adapter.executable == "demucs-custom"
     assert source_separation_adapter.model == "mdx-extra"
     assert source_separation_adapter.device == "cpu"
+
+
+def test_dub_command_passes_audio_normalization_options(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "video.mp4"
+    output_path = tmp_path / "video.pl.dubbed.mp4"
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    @dataclass
+    class FakeArtifacts:
+        dubbed_video_path: Path
+        workspace_dir: Path
+        fitted_transcript_path: Path | None = None
+        mixed_audio_path: Path | None = None
+        normalized_audio_path: Path | None = None
+        srt_path: Path | None = None
+        manifest_path: Path | None = None
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> FakeArtifacts:
+        calls.append({"video_path": video_path, "output_path": output_path, **kwargs})
+        output_path.write_bytes(b"fake dubbed video")
+        return FakeArtifacts(output_path, tmp_path / "workspace")
+
+    monkeypatch.setattr(cli_dub_runner, "dub_video", fake_dub_video)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(video_path),
+            "--to",
+            "pl",
+            "--output",
+            str(output_path),
+            "--normalize-final-audio",
+            "--target-final-lufs",
+            "-18",
+            "--final-true-peak",
+            "-2",
+            "--final-loudness-range",
+            "9",
+            "--no-preflight",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0]["normalize_final_audio"] is True
+    assert calls[0]["target_final_lufs"] == -18.0
+    assert calls[0]["final_true_peak"] == -2.0
+    assert calls[0]["final_loudness_range"] == 9.0

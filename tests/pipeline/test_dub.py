@@ -653,6 +653,163 @@ def test_dub_video_can_mix_original_audio_before_export(
     ]
 
 
+def test_dub_video_can_normalize_final_audio_before_export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        calls.append({"step": "extract", "output_path": output_file})
+        return output_file
+
+    def fake_normalize_audio_loudness(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        target_lufs: float = -16.0,
+        true_peak: float = -1.5,
+        loudness_range: float = 11.0,
+        sample_rate: int | None = None,
+        channels: int | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        assert output_path is not None
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"normalized audio")
+
+        calls.append(
+            {
+                "step": "normalize",
+                "input_path": Path(input_path),
+                "output_path": output_file,
+                "target_lufs": target_lufs,
+                "true_peak": true_peak,
+                "loudness_range": loudness_range,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "overwrite": overwrite,
+                "executable": executable,
+            }
+        )
+
+        return output_file
+
+    def fake_export_dubbed_video(
+        video_path: str | Path,
+        speech_track_path: str | Path,
+        output_path: str | Path,
+        *,
+        subtitle_path: Path | None = None,
+        subtitle_embed: str = "none",
+        subtitle_language: str | None = None,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path)
+        output_file.write_bytes(b"fake dubbed video")
+        calls.append(
+            {
+                "step": "export",
+                "speech_track_path": Path(speech_track_path),
+            }
+        )
+        return output_file
+
+    monkeypatch.setattr(
+        dub_stages,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+    monkeypatch.setattr(
+        dub_stages,
+        "normalize_audio_loudness",
+        fake_normalize_audio_loudness,
+    )
+    monkeypatch.setattr(
+        dub_stages,
+        "export_dubbed_video",
+        fake_export_dubbed_video,
+    )
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        speech_sample_rate=8_000,
+        normalize_final_audio=True,
+        target_final_lufs=-18.0,
+        final_true_peak=-2.0,
+        final_loudness_range=9.0,
+        ffmpeg_executable="ffmpeg-test",
+        overwrite=True,
+    )
+
+    assert artifacts.normalized_audio_path == (
+        workspace_dir / "lesson.pl.normalized.wav"
+    )
+    assert artifacts.dubbed_video_path == output_path
+
+    assert calls == [
+        {
+            "step": "extract",
+            "output_path": workspace_dir / "lesson.audio.wav",
+        },
+        {
+            "step": "normalize",
+            "input_path": workspace_dir / "lesson.pl.speech-track.wav",
+            "output_path": workspace_dir / "lesson.pl.normalized.wav",
+            "target_lufs": -18.0,
+            "true_peak": -2.0,
+            "loudness_range": 9.0,
+            "sample_rate": 8_000,
+            "channels": 1,
+            "overwrite": True,
+            "executable": "ffmpeg-test",
+        },
+        {
+            "step": "export",
+            "speech_track_path": workspace_dir / "lesson.pl.normalized.wav",
+        },
+    ]
+
+    manifest_path = artifacts.manifest_path
+    assert manifest_path is not None
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest["options"]["normalize_final_audio"] is True
+    assert manifest["options"]["target_final_lufs"] == -18.0
+    assert manifest["artifacts"]["normalized_audio_path"] == str(
+        workspace_dir / "lesson.pl.normalized.wav"
+    )
+
+
 def test_dub_video_can_export_srt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

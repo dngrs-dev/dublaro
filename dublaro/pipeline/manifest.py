@@ -87,6 +87,10 @@ class DubbingOptionsManifest(BaseModel):
     speech_gain: float
     ducking_margin_seconds: float
     ducking_fade_seconds: float
+    normalize_final_audio: bool
+    target_final_lufs: float
+    final_true_peak: float
+    final_loudness_range: float
     translation_group_segments: bool
     max_translation_group_pause_seconds: float
     max_translation_group_duration_seconds: float
@@ -122,6 +126,7 @@ class DubbingArtifactsManifest(BaseModel):
     video_fitted_background_audio_path: str | None = None
     mix_original_audio_path: str | None = None
     mixed_audio_path: str | None = None
+    normalized_audio_path: str | None = None
     srt_path: str | None = None
     embedded_srt_path: str | None = None
     manifest_path: str | None = None

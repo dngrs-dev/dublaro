@@ -175,6 +175,13 @@ def print_dub_artifacts(artifacts: DubbingArtifacts) -> None:
     if artifacts.mixed_audio_path is not None:
         console.print(f"[green]Mixed audio:[/green] {artifacts.mixed_audio_path}")
 
+    normalized_audio_path = _optional_artifact_path(
+        artifacts,
+        "normalized_audio_path",
+    )
+    if normalized_audio_path is not None:
+        console.print(f"[green]Normalized audio:[/green] {normalized_audio_path}")
+
     if artifacts.srt_path is not None:
         console.print(f"[green]SRT subtitles:[/green] {artifacts.srt_path}")
 

@@ -140,6 +140,15 @@ class MixConfig(BaseModel):
     ducking_fade_seconds: float | None = None
 
 
+class AudioNormalizationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    normalize_final_audio: bool | None = None
+    target_final_lufs: float | None = Field(lt=0, default=None)
+    final_true_peak: float | None = Field(le=0, default=None)
+    final_loudness_range: float | None = Field(gt=0, default=None)
+
+
 class SrtConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -183,6 +192,7 @@ class DubConfig(BaseModel):
     fit_video: FitVideoConfig = FitVideoConfig()
     source_separation: SourceSeparationConfig = SourceSeparationConfig()
     mix: MixConfig = MixConfig()
+    audio_normalization: AudioNormalizationConfig = AudioNormalizationConfig()
     srt: SrtConfig = SrtConfig()
     manifest: ManifestConfig = ManifestConfig()
 

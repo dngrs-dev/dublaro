@@ -51,6 +51,10 @@ class DubOptions:
     speech_gain: float = 1.0
     ducking_margin_seconds: float = 0.05
     ducking_fade_seconds: float = 0.05
+    normalize_final_audio: bool = False
+    target_final_lufs: float = -16.0
+    final_true_peak: float = -1.5
+    final_loudness_range: float = 11.0
     translation_group_segments: bool = True
     max_translation_group_pause_seconds: float = 0.8
     max_translation_group_duration_seconds: float = 12.0
@@ -107,6 +111,15 @@ class DubOptions:
         if self.max_video_slowdown < 1.0:
             raise ValueError("max_video_slowdown must be >= 1.0")
 
+        if self.target_final_lufs >= 0:
+            raise ValueError("target_final_lufs must be negative")
+
+        if self.final_true_peak > 0:
+            raise ValueError("final_true_peak must be <= 0")
+
+        if self.final_loudness_range <= 0:
+            raise ValueError("final_loudness_range must be > 0")
+
 
 @dataclass(frozen=True)
 class DubArtifactPaths:
@@ -127,6 +140,7 @@ class DubArtifactPaths:
     video_fitted_original_audio_path: Path
     mix_original_audio_path: Path
     mixed_audio_path: Path
+    normalized_audio_path: Path
     separated_background_audio_path: Path
     separated_voice_audio_path: Path
     video_fitted_background_audio_path: Path
@@ -207,6 +221,9 @@ class DubPaths:
             ),
             mix_original_audio_path=self.workspace_dir / f"{stem}.original-mix.wav",
             mixed_audio_path=self.workspace_dir / f"{timing_stem}.mixed.wav",
+            normalized_audio_path=(
+                self.workspace_dir / f"{timing_stem}.normalized.wav"
+            ),
             separated_background_audio_path=self.workspace_dir
             / f"{stem}.background.wav",
             separated_voice_audio_path=self.workspace_dir / f"{stem}.voice.wav",

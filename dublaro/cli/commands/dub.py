@@ -459,6 +459,34 @@ def dub(
             help="Fade time for ducking transitions.",
         ),
     ] = None,
+    normalize_final_audio: Annotated[
+        bool | None,
+        typer.Option(
+            "--normalize-final-audio/--no-normalize-final-audio",
+            help="Normalize final audio loudness before exporting video.",
+        ),
+    ] = None,
+    target_final_lufs: Annotated[
+        float | None,
+        typer.Option(
+            "--target-final-lufs",
+            help="Target final audio loudness in LUFS.",
+        ),
+    ] = None,
+    final_true_peak: Annotated[
+        float | None,
+        typer.Option(
+            "--final-true-peak",
+            help="Target final audio true peak in dBTP.",
+        ),
+    ] = None,
+    final_loudness_range: Annotated[
+        float | None,
+        typer.Option(
+            "--final-loudness-range",
+            help="Target final audio loudness range.",
+        ),
+    ] = None,
     export_srt_enabled: Annotated[
         bool | None,
         typer.Option(
@@ -595,6 +623,10 @@ def dub(
                 speech_gain=speech_gain,
                 ducking_margin_seconds=ducking_margin_seconds,
                 ducking_fade_seconds=ducking_fade_seconds,
+                normalize_final_audio=normalize_final_audio,
+                target_final_lufs=target_final_lufs,
+                final_true_peak=final_true_peak,
+                final_loudness_range=final_loudness_range,
                 export_srt_enabled=export_srt_enabled,
                 srt_output_path=srt_output_path,
                 srt_text_mode=srt_text_mode,
