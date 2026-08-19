@@ -68,6 +68,9 @@ class DubCommandOverrides:
     max_video_slowdown: float | None = None
     mix_original_audio_enabled: bool | None = None
     source_separation_backend: str | None = None
+    demucs_executable: str | None = None
+    demucs_model: str | None = None
+    demucs_device: str | None = None
     original_audio_gain: float | None = None
     ducking_gain: float | None = None
     speech_gain: float | None = None
@@ -142,6 +145,9 @@ class DubCommandOverrides:
             max_video_slowdown=self.max_video_slowdown,
             mix_original_audio=self.mix_original_audio_enabled,
             source_separation_backend=self.source_separation_backend,
+            demucs_executable=self.demucs_executable,
+            demucs_model=self.demucs_model,
+            demucs_device=self.demucs_device,
             original_audio_gain=self.original_audio_gain,
             ducking_gain=self.ducking_gain,
             speech_gain=self.speech_gain,

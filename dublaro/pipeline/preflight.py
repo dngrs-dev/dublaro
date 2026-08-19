@@ -76,6 +76,7 @@ def validate_dub_preflight(
     text_adapter_backend: str = "rules",
     background_mode: str = "speech-only",
     source_separation_backend: str = "fake",
+    demucs_executable: str = "demucs",
     ollama_model: str = DEFAULT_OLLAMA_MODEL,
     ollama_url: str = DEFAULT_OLLAMA_URL,
     ollama_timeout_seconds: float = DEFAULT_OLLAMA_PREFLIGHT_TIMEOUT_SECONDS,
@@ -125,6 +126,7 @@ def validate_dub_preflight(
         issues,
         background_mode=background_mode,
         source_separation_backend=source_separation_backend,
+        demucs_executable=demucs_executable,
     )
     checked_piper_executables: set[str] = set()
     _check_piper(
@@ -314,6 +316,7 @@ def _check_source_separation(
     *,
     background_mode: str,
     source_separation_backend: str,
+    demucs_executable: str,
 ) -> None:
     if background_mode != "separated":
         return
@@ -330,11 +333,11 @@ def _check_source_separation(
         )
         return
 
-    if shutil.which("demucs") is None:
+    if shutil.which(demucs_executable) is None:
         _add_error(
             issues,
             "demucs_executable_missing",
-            "Demucs executable was not found: demucs",
+            f"Demucs executable was not found: {demucs_executable}",
             'Install it with: pip install -e ".[source-separation]"',
         )
 

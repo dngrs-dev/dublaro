@@ -127,6 +127,7 @@ def run_dub_preflight(
         text_adapter_backend=settings.text_adapter_backend,
         background_mode=settings.background_mode,
         source_separation_backend=settings.source_separation_backend,
+        demucs_executable=settings.demucs_executable,
         ollama_model=settings.ollama_model,
         ollama_url=settings.ollama_url,
         ollama_timeout_seconds=settings.ollama_timeout_seconds,
@@ -165,7 +166,13 @@ def run_resolved_dub(
         else None
     )
     source_separation_adapter = (
-        create_source_separation_adapter(settings.source_separation_backend)
+        create_source_separation_adapter(
+            settings.source_separation_backend,
+            demucs_executable=settings.demucs_executable,
+            demucs_model=settings.demucs_model,
+            demucs_device=settings.demucs_device,
+            ffmpeg_executable=settings.ffmpeg_executable,
+        )
         if parsed_background_mode == "separated"
         else None
     )

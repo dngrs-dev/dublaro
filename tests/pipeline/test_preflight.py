@@ -99,10 +99,12 @@ def test_dub_preflight_checks_demucs_when_separated_background(
         text_adapter_backend="rules",
         background_mode="separated",
         source_separation_backend="demucs",
+        demucs_executable="demucs-custom",
         tts_backend="fake",
     )
 
     assert {issue.code for issue in report.errors} == {"demucs_executable_missing"}
+    assert report.errors[0].message == "Demucs executable was not found: demucs-custom"
 
 
 def test_dub_preflight_reports_existing_output(

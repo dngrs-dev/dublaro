@@ -124,6 +124,9 @@ class SourceSeparationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     backend: str | None = None
+    demucs_executable: str | None = None
+    demucs_model: str | None = None
+    demucs_device: str | None = None
 
 
 class MixConfig(BaseModel):

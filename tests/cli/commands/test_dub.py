@@ -968,6 +968,12 @@ def test_dub_command_passes_demucs_source_separation_adapter(
             "separated",
             "--source-separation",
             "demucs",
+            "--demucs-executable",
+            "demucs-custom",
+            "--demucs-model",
+            "mdx-extra",
+            "--demucs-device",
+            "cpu",
             "--no-preflight",
         ],
     )
@@ -981,5 +987,6 @@ def test_dub_command_passes_demucs_source_separation_adapter(
 
     assert isinstance(source_separation_adapter, DemucsSourceSeparationAdapter)
     assert source_separation_adapter.name == "demucs"
-    assert source_separation_adapter.executable == "demucs"
-    assert source_separation_adapter.model == "htdemucs"
+    assert source_separation_adapter.executable == "demucs-custom"
+    assert source_separation_adapter.model == "mdx-extra"
+    assert source_separation_adapter.device == "cpu"

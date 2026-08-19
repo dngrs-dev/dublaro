@@ -128,3 +128,29 @@ ollama_temperature = 0.1
     assert loaded.config.dub.translation.ollama_url == "http://ollama.local:11434"
     assert loaded.config.dub.translation.ollama_timeout_seconds == 120.0
     assert loaded.config.dub.translation.ollama_temperature == 0.1
+
+
+def test_load_config_reads_source_separation_settings(tmp_path: Path) -> None:
+    config_path = tmp_path / "dublaro.toml"
+    config_path.write_text(
+        """
+[dub]
+target_language = "pl"
+background_mode = "separated"
+
+[dub.source_separation]
+backend = "demucs"
+demucs_executable = "demucs-custom"
+demucs_model = "mdx-extra"
+demucs_device = "cpu"
+""",
+        encoding="utf-8",
+    )
+
+    loaded = load_config(config_path)
+
+    assert loaded.config.dub.background_mode == "separated"
+    assert loaded.config.dub.source_separation.backend == "demucs"
+    assert loaded.config.dub.source_separation.demucs_executable == "demucs-custom"
+    assert loaded.config.dub.source_separation.demucs_model == "mdx-extra"
+    assert loaded.config.dub.source_separation.demucs_device == "cpu"

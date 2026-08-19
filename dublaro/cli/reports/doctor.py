@@ -252,9 +252,7 @@ def _check_piper_target(
     inferred_config_path = (
         config_path
         if config_path is not None
-        else default_piper_config_path(model_path)
-        if model_path is not None
-        else None
+        else default_piper_config_path(model_path) if model_path is not None else None
     )
 
     _check_file(checks, category="piper", name=f"{label} model", path=model_path)
@@ -447,7 +445,7 @@ def _check_source_separation_configuration(
         checks,
         category="source-separation",
         name="Demucs executable",
-        executable="demucs",
+        executable=dub_config.source_separation.demucs_executable or "demucs",
         version_args=None,
         missing_hint='Install it with: pip install -e ".[source-separation]"',
     )

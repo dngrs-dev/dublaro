@@ -65,6 +65,27 @@ def batch(
             help="Source separation backend used when --background-mode separated.",
         ),
     ] = None,
+    demucs_executable: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-executable",
+            help="Demucs executable used when --source-separation demucs.",
+        ),
+    ] = None,
+    demucs_model: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-model",
+            help="Demucs model used when --source-separation demucs.",
+        ),
+    ] = None,
+    demucs_device: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-device",
+            help="Demucs device, for example cpu or cuda.",
+        ),
+    ] = None,
     output_dir: Annotated[
         Path | None,
         typer.Option(
@@ -167,6 +188,9 @@ def batch(
             text_workflow=text_workflow,
             background_mode=background_mode,
             source_separation_backend=source_separation_backend,
+            demucs_executable=demucs_executable,
+            demucs_model=demucs_model,
+            demucs_device=demucs_device,
             output_dir=output_dir,
             source_language=source_language,
             workspace_root=workspace_root,

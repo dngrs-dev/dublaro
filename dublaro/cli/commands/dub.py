@@ -403,6 +403,27 @@ def dub(
             help="Source separation backend used when --background-mode separated.",
         ),
     ] = None,
+    demucs_executable: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-executable",
+            help="Demucs executable used when --source-separation demucs.",
+        ),
+    ] = None,
+    demucs_model: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-model",
+            help="Demucs model used when --source-separation demucs.",
+        ),
+    ] = None,
+    demucs_device: Annotated[
+        str | None,
+        typer.Option(
+            "--demucs-device",
+            help="Demucs device, for example cpu or cuda.",
+        ),
+    ] = None,
     original_audio_gain: Annotated[
         float | None,
         typer.Option(
@@ -566,6 +587,9 @@ def dub(
                 max_video_slowdown=max_video_slowdown,
                 mix_original_audio_enabled=mix_original_audio_enabled,
                 source_separation_backend=source_separation_backend,
+                demucs_executable=demucs_executable,
+                demucs_model=demucs_model,
+                demucs_device=demucs_device,
                 original_audio_gain=original_audio_gain,
                 ducking_gain=ducking_gain,
                 speech_gain=speech_gain,

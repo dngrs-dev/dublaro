@@ -80,6 +80,9 @@ class DubCliOverrides:
     max_video_slowdown: float | None = None
     background_mode: str | None = None
     source_separation_backend: str | None = None
+    demucs_executable: str | None = None
+    demucs_model: str | None = None
+    demucs_device: str | None = None
     mix_original_audio: bool | None = None
     original_audio_gain: float | None = None
     ducking_gain: float | None = None
@@ -162,6 +165,9 @@ class ResolvedDubSettings:
     max_video_slowdown: float
     background_mode: str
     source_separation_backend: str
+    demucs_executable: str
+    demucs_model: str
+    demucs_device: str | None
     mix_original_audio: bool
     original_audio_gain: float
     ducking_gain: float
@@ -643,6 +649,20 @@ def resolve_dub_settings(
             overrides.source_separation_backend,
             config.source_separation.backend,
             "fake",
+        ),
+        demucs_executable=_select(
+            overrides.demucs_executable,
+            config.source_separation.demucs_executable,
+            "demucs",
+        ),
+        demucs_model=_select(
+            overrides.demucs_model,
+            config.source_separation.demucs_model,
+            "htdemucs",
+        ),
+        demucs_device=_select_optional(
+            overrides.demucs_device,
+            config.source_separation.demucs_device,
         ),
         mix_original_audio=mix_original_audio,
         original_audio_gain=_select(

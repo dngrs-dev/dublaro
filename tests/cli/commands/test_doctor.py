@@ -135,6 +135,7 @@ background_mode = "separated"
 
 [dub.source_separation]
 backend = "demucs"
+demucs_executable = "demucs-custom"
 """,
         encoding="utf-8",
     )
@@ -164,6 +165,7 @@ backend = "demucs"
         check.category == "source-separation"
         and check.name == "Demucs executable"
         and check.status == "error"
+        and "demucs-custom" in check.message
         for check in report.checks
     )
 
