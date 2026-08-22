@@ -95,3 +95,16 @@ def test_dub_options_rejects_resume_with_overwrite() -> None:
             resume=True,
             overwrite=True,
         )
+
+
+def test_dub_options_allows_start_from_with_overwrite() -> None:
+    options = DubOptions(
+        source_language="en",
+        target_language="pl",
+        start_from_checkpoint="adapted",
+        overwrite=True,
+    )
+
+    assert options.start_from_checkpoint == "adapted"
+    assert options.resume is False
+    assert options.overwrite is True

@@ -58,6 +58,11 @@ DUB_CHECKPOINT_ARTIFACT_NAMES: Final[dict[DubCheckpoint, str]] = {
     "manifest": "manifest_path",
 }
 
+STARTABLE_DUB_CHECKPOINTS: Final[tuple[DubCheckpoint, ...]] = (
+    "translated",
+    "adapted",
+)
+
 
 def dub_checkpoint_artifact_name(checkpoint: DubCheckpoint) -> str:
     return DUB_CHECKPOINT_ARTIFACT_NAMES[checkpoint]
@@ -65,6 +70,10 @@ def dub_checkpoint_artifact_name(checkpoint: DubCheckpoint) -> str:
 
 def format_dub_checkpoints() -> str:
     return ", ".join(DUB_CHECKPOINTS)
+
+
+def format_startable_dub_checkpoints() -> str:
+    return ", ".join(STARTABLE_DUB_CHECKPOINTS)
 
 
 def parse_dub_checkpoint(value: str) -> DubCheckpoint:
@@ -82,3 +91,34 @@ def will_reach_checkpoint(
         return True
 
     return DUB_CHECKPOINT_ORDER[until_checkpoint] >= DUB_CHECKPOINT_ORDER[checkpoint]
+
+
+def checkpoint_index(checkpoint: DubCheckpoint) -> int:
+    return DUB_CHECKPOINT_ORDER[checkpoint]
+
+
+def will_run_checkpoint(
+    start_from_checkpoint: DubCheckpoint | None,
+    checkpoint: DubCheckpoint,
+) -> bool:
+    if start_from_checkpoint is None:
+        return True
+
+    return (
+        DUB_CHECKPOINT_ORDER[checkpoint] > DUB_CHECKPOINT_ORDER[start_from_checkpoint]
+    )
+
+
+def checkpoint_between(
+    *,
+    start_from_checkpoint: DubCheckpoint | None,
+    until_checkpoint: DubCheckpoint | None,
+    checkpoint: DubCheckpoint,
+) -> bool:
+    return will_run_checkpoint(
+        start_from_checkpoint,
+        checkpoint,
+    ) and will_reach_checkpoint(
+        until_checkpoint,
+        checkpoint,
+    )

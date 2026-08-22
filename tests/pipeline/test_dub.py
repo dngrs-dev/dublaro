@@ -1474,3 +1474,65 @@ def test_dub_video_can_use_llm_dubbing_text_workflow(
     assert adapted.segments[0].translated_text == "Czesc swiecie."
     assert adapted.segments[0].adapted_text == "Czesc."
     assert adapted.metadata["text_workflow"] == "llm-dubbing"
+
+
+def test_dub_video_can_start_from_adapted_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / ".dublaro" / "lesson"
+
+    video_path.write_bytes(b"fake video")
+    workspace_dir.mkdir(parents=True)
+
+    save_transcript(
+        Transcript(
+            id="lesson",
+            source_language="en",
+            target_language="pl",
+            segments=[
+                Segment(
+                    id="seg-0001",
+                    start=0.0,
+                    end=1.0,
+                    speaker="SPEAKER_00",
+                    adapted_text="Czesc.",
+                )
+            ],
+        ),
+        workspace_dir / "lesson.pl.adapted.json",
+    )
+
+    def fake_export_video(*args: object, **kwargs: object) -> Path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake dubbed video")
+        return output_path
+
+    monkeypatch.setattr(
+        "dublaro.pipeline.dub_stages.export_dubbed_video",
+        fake_export_video,
+    )
+
+    artifacts = dub_video(
+        video_path=video_path,
+        output_path=output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=ExplodingAsrAdapter(),
+        translation_adapter=ExplodingTranslationAdapter(),
+        text_adapter=ExplodingTextAdapter(),
+        tts_adapter=FakeTtsAdapter(),
+        background_mode="speech-only",
+        resume=False,
+        overwrite=True,
+        start_from_checkpoint="adapted",
+    )
+
+    assert artifacts.dubbed_video_path == output_path
+    assert output_path.exists()
+    assert artifacts.synthesized_transcript_path is not None
+    assert artifacts.synthesized_transcript_path.exists()
+    assert not (workspace_dir / "lesson.audio.wav").exists()

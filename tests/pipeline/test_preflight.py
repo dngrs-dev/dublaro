@@ -442,3 +442,15 @@ def test_dub_preflight_checks_ollama_translation_model(
     )
 
     assert {issue.code for issue in report.errors} == {"ollama_model_missing"}
+
+
+def test_preflight_scope_skips_text_checks_when_starting_from_adapted() -> None:
+    scope = PreflightScope.from_checkpoints(
+        start_from_checkpoint="adapted",
+        until_checkpoint=None,
+    )
+
+    assert not scope.translate_text
+    assert not scope.adapt_text
+    assert scope.synthesize_speech
+    assert scope.export_video

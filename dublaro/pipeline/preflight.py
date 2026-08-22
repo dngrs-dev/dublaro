@@ -17,7 +17,10 @@ from dublaro.adapters.translation import (
     DEFAULT_OLLAMA_TRANSLATION_TIMEOUT_SECONDS,
     DEFAULT_OLLAMA_TRANSLATION_URL,
 )
-from dublaro.pipeline.checkpoints import DubCheckpoint, will_reach_checkpoint
+from dublaro.pipeline.checkpoints import (
+    DubCheckpoint,
+    checkpoint_between,
+)
 
 PreflightSeverity = Literal["error", "warning"]
 
@@ -53,17 +56,54 @@ class PreflightScope:
         cls,
         until_checkpoint: DubCheckpoint | None,
     ) -> "PreflightScope":
+        return cls.from_checkpoints(
+            start_from_checkpoint=None,
+            until_checkpoint=until_checkpoint,
+        )
+
+    @classmethod
+    def from_checkpoints(
+        cls,
+        *,
+        start_from_checkpoint: DubCheckpoint | None,
+        until_checkpoint: DubCheckpoint | None,
+    ) -> "PreflightScope":
         return cls(
-            translate_text=will_reach_checkpoint(until_checkpoint, "translated"),
-            adapt_text=will_reach_checkpoint(until_checkpoint, "adapted"),
-            synthesize_speech=will_reach_checkpoint(
-                until_checkpoint,
-                "synthesized",
+            translate_text=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="translated",
             ),
-            mix_audio=will_reach_checkpoint(until_checkpoint, "mixed"),
-            export_video=will_reach_checkpoint(until_checkpoint, "exported"),
-            export_srt=will_reach_checkpoint(until_checkpoint, "subtitles"),
-            write_manifest=will_reach_checkpoint(until_checkpoint, "manifest"),
+            adapt_text=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="adapted",
+            ),
+            synthesize_speech=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="synthesized",
+            ),
+            mix_audio=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="mixed",
+            ),
+            export_video=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="exported",
+            ),
+            export_srt=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="subtitles",
+            ),
+            write_manifest=checkpoint_between(
+                start_from_checkpoint=start_from_checkpoint,
+                until_checkpoint=until_checkpoint,
+                checkpoint="manifest",
+            ),
         )
 
 

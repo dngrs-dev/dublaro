@@ -10,7 +10,12 @@ from dublaro.adapters.source_separation import SourceSeparationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
-from dublaro.pipeline.checkpoints import DUB_CHECKPOINTS, DubCheckpoint
+from dublaro.pipeline.checkpoints import (
+    DUB_CHECKPOINTS,
+    STARTABLE_DUB_CHECKPOINTS,
+    DubCheckpoint,
+    checkpoint_index,
+)
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
 
@@ -70,6 +75,7 @@ class DubOptions:
     write_manifest: bool = True
     manifest_output_path: Path | None = None
     until_checkpoint: DubCheckpoint | None = None
+    start_from_checkpoint: DubCheckpoint | None = None
     ffmpeg_executable: str = "ffmpeg"
     resume: bool = False
     overwrite: bool = False
@@ -166,6 +172,27 @@ class DubOptions:
             raise ValueError(
                 "until_checkpoint='manifest' requires write_manifest=True."
             )
+
+        if (
+            self.start_from_checkpoint is not None
+            and self.start_from_checkpoint not in DUB_CHECKPOINTS
+        ):
+            raise ValueError("Invalid dub start checkpoint.")
+
+        if (
+            self.start_from_checkpoint is not None
+            and self.start_from_checkpoint not in STARTABLE_DUB_CHECKPOINTS
+        ):
+            allowed = ", ".join(STARTABLE_DUB_CHECKPOINTS)
+            raise ValueError(f"start_from_checkpoint must be one of: {allowed}.")
+
+        if (
+            self.start_from_checkpoint is not None
+            and self.until_checkpoint is not None
+            and checkpoint_index(self.start_from_checkpoint)
+            > checkpoint_index(self.until_checkpoint)
+        ):
+            raise ValueError("start_from_checkpoint cannot be after until_checkpoint.")
 
 
 @dataclass(frozen=True)

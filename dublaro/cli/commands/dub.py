@@ -113,6 +113,17 @@ def dub(
             ),
         ),
     ] = None,
+    start_from_checkpoint: Annotated[
+        str | None,
+        typer.Option(
+            "--start-from",
+            help=(
+                "Continue from an existing checkpoint artifact. "
+                "Allowed values: translated, adapted. Use --overwrite to rebuild "
+                "later artifacts or --resume to reuse them."
+            ),
+        ),
+    ] = None,
     asr_backend: Annotated[
         str | None,
         typer.Option(
@@ -577,6 +588,7 @@ def dub(
                 workspace_dir=workspace_dir,
                 resume_enabled=resume_enabled,
                 until_checkpoint=until_checkpoint,
+                start_from_checkpoint=start_from_checkpoint,
                 overwrite=overwrite,
                 preflight_enabled=preflight_enabled,
                 ffmpeg_executable=ffmpeg_executable,
@@ -669,6 +681,7 @@ def dub(
             parsed_srt_text_mode=resolved_dub.srt_text_mode,
             parsed_subtitle_embed=resolved_dub.subtitle_embed,
             parsed_until_checkpoint=resolved_dub.until_checkpoint,
+            parsed_start_from_checkpoint=resolved_dub.start_from_checkpoint,
             progress_callback=print_dub_progress,
         )
     except (

@@ -31,18 +31,20 @@ from dublaro.pipeline.dub_stages import (
     _extract_audio,
     _fit_speech_to_timing,
     _fit_video_to_speech,
-    _generate_llm_dubbing_script,
     _normalize_audio_for_export,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
+    _prepare_text_for_dubbing,
     _repair_speech_timing,
     _synthesize_speech,
     _transcribe_source_audio,
     _translate_source_transcript,
     _write_manifest,
 )
+from dublaro.pipeline.resume import load_reusable_transcript
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
+from dublaro.schemas.transcript import Transcript
 
 __all__ = [
     "DubbingArtifacts",
@@ -219,6 +221,7 @@ def dub_video(
     write_manifest: bool = True,
     manifest_output_path: str | Path | None = None,
     until_checkpoint: DubCheckpoint | None = None,
+    start_from_checkpoint: DubCheckpoint | None = None,
     progress_callback: DubbingProgressCallback | None = None,
     ffmpeg_executable: str = "ffmpeg",
     resume: bool = False,
@@ -280,6 +283,7 @@ def dub_video(
             Path(manifest_output_path) if manifest_output_path is not None else None
         ),
         until_checkpoint=until_checkpoint,
+        start_from_checkpoint=start_from_checkpoint,
         ffmpeg_executable=ffmpeg_executable,
         resume=resume,
         overwrite=overwrite,
@@ -314,43 +318,102 @@ def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
 
     state = DubRunState.initial(context)
 
-    state.extracted_audio_path = _extract_audio(context)
-    if stopped := _stop_if_requested(context, state, "audio"):
-        return stopped
+    start_from_checkpoint = context.options.start_from_checkpoint
 
-    source_transcript = _transcribe_source_audio(context, state.extracted_audio_path)
-    if stopped := _stop_if_requested(context, state, "transcribed"):
-        return stopped
+    source_transcript: Transcript | None = None
+    translated_transcript: Transcript | None = None
+    adapted_transcript: Transcript | None = None
 
-    source_transcript = _diarize_source_transcript(
-        context,
-        state.extracted_audio_path,
-        source_transcript,
-    )
-    if context.options.diarize:
-        state.diarized_transcript_path = context.artifact_paths.diarized_transcript_path
+    if start_from_checkpoint is None:
+        state.extracted_audio_path = _extract_audio(context)
 
-    if stopped := _stop_if_requested(context, state, "diarized"):
-        return stopped
+        if stopped_artifacts := _stop_if_requested(context, state, "audio"):
+            return stopped_artifacts
 
-    if context.options.text_workflow == "translate-then-adapt":
-        translated_transcript = _translate_source_transcript(context, source_transcript)
-        if stopped := _stop_if_requested(context, state, "translated"):
-            return stopped
+        source_transcript = _transcribe_source_audio(
+            context, state.extracted_audio_path
+        )
+
+        if stopped_artifacts := _stop_if_requested(context, state, "transcribed"):
+            return stopped_artifacts
+
+        source_transcript = _diarize_source_transcript(
+            context,
+            state.extracted_audio_path,
+            source_transcript,
+        )
+
+        if stopped_artifacts := _stop_if_requested(context, state, "diarized"):
+            return stopped_artifacts
+
+        if context.options.text_workflow == "llm-dubbing":
+            text_result = _prepare_text_for_dubbing(context, source_transcript)
+            translated_transcript = text_result.translated_transcript
+            adapted_transcript = text_result.adapted_transcript
+
+            if stopped_artifacts := _stop_if_requested(context, state, "translated"):
+                return stopped_artifacts
+
+            if stopped_artifacts := _stop_if_requested(context, state, "adapted"):
+                return stopped_artifacts
+        else:
+            translated_transcript = _translate_source_transcript(
+                context,
+                source_transcript,
+            )
+
+            if stopped_artifacts := _stop_if_requested(context, state, "translated"):
+                return stopped_artifacts
+
+            adapted_transcript = _adapt_translated_text(context, translated_transcript)
+
+            if stopped_artifacts := _stop_if_requested(context, state, "adapted"):
+                return stopped_artifacts
+
+    elif start_from_checkpoint == "translated":
+        translated_transcript = _load_required_checkpoint_transcript(
+            state.translated_transcript_path,
+            "translated",
+        )
+        source_transcript = (
+            _load_optional_checkpoint_transcript(state.source_transcript_path)
+            or translated_transcript
+        )
+
+        if stopped_artifacts := _stop_if_requested(context, state, "translated"):
+            return stopped_artifacts
 
         adapted_transcript = _adapt_translated_text(context, translated_transcript)
-    elif context.options.text_workflow == "llm-dubbing":
-        text_workflow = _generate_llm_dubbing_script(context, source_transcript)
-        translated_transcript = text_workflow.translated_transcript
-        adapted_transcript = text_workflow.adapted_transcript
 
-        if stopped := _stop_if_requested(context, state, "translated"):
-            return stopped
+        if stopped_artifacts := _stop_if_requested(context, state, "adapted"):
+            return stopped_artifacts
+
+    elif start_from_checkpoint == "adapted":
+        adapted_transcript = _load_required_checkpoint_transcript(
+            state.adapted_transcript_path,
+            "adapted",
+        )
+        translated_transcript = (
+            _load_optional_checkpoint_transcript(state.translated_transcript_path)
+            or adapted_transcript
+        )
+        source_transcript = (
+            _load_optional_checkpoint_transcript(state.source_transcript_path)
+            or translated_transcript
+        )
+
+        if stopped_artifacts := _stop_if_requested(context, state, "adapted"):
+            return stopped_artifacts
+
     else:
-        raise ValueError(f"Unsupported text workflow: {context.options.text_workflow}")
+        raise ValueError(f"Unsupported start checkpoint: {start_from_checkpoint}")
 
-    if stopped := _stop_if_requested(context, state, "adapted"):
-        return stopped
+    if adapted_transcript is None:
+        raise RuntimeError("Adapted transcript was not prepared.")
+    if translated_transcript is None:
+        translated_transcript = adapted_transcript
+    if source_transcript is None:
+        source_transcript = translated_transcript
 
     synthesized_transcript = _synthesize_speech(context, adapted_transcript)
     if stopped := _stop_if_requested(context, state, "synthesized"):
@@ -482,3 +545,22 @@ def _stop_if_requested(
         return None
 
     return state.artifacts(context, stopped_at_checkpoint=checkpoint)
+
+
+def _load_optional_checkpoint_transcript(path: Path) -> Transcript | None:
+    return load_reusable_transcript(path)
+
+
+def _load_required_checkpoint_transcript(
+    path: Path,
+    checkpoint: DubCheckpoint,
+) -> Transcript:
+    transcript = load_reusable_transcript(path)
+
+    if transcript is None:
+        raise FileNotFoundError(
+            f"Cannot start from {checkpoint}: expected transcript artifact "
+            f"does not exist or is invalid: {path}"
+        )
+
+    return transcript

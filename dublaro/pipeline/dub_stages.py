@@ -1105,6 +1105,7 @@ def _write_manifest(
                 resume=run_options.resume,
                 overwrite=run_options.overwrite,
                 until_checkpoint=run_options.until_checkpoint,
+                start_from_checkpoint=run_options.start_from_checkpoint,
             ),
             artifacts=DubbingArtifactsManifest(
                 workspace_dir=str(context.paths.workspace_dir),

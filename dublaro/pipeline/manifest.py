@@ -102,6 +102,7 @@ class DubbingOptionsManifest(BaseModel):
     ffmpeg_executable: str
     overwrite: bool
     until_checkpoint: str | None = None
+    start_from_checkpoint: str | None = None
 
 
 class DubbingArtifactsManifest(BaseModel):

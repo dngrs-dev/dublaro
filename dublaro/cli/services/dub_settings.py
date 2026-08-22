@@ -88,6 +88,7 @@ class DubCommandOverrides:
     write_manifest_enabled: bool | None = None
     manifest_output_path: Path | None = None
     until_checkpoint: str | None = None
+    start_from_checkpoint: str | None = None
 
     def to_cli_overrides(self) -> DubCliOverrides:
         return DubCliOverrides(
@@ -170,6 +171,7 @@ class DubCommandOverrides:
             write_manifest=self.write_manifest_enabled,
             manifest_output_path=self.manifest_output_path,
             until_checkpoint=self.until_checkpoint,
+            start_from_checkpoint=self.start_from_checkpoint,
         )
 
 
@@ -181,6 +183,7 @@ class ResolvedDubCommandSettings:
     srt_text_mode: SrtTextMode
     subtitle_embed: SubtitleEmbedMode
     until_checkpoint: DubCheckpoint | None
+    start_from_checkpoint: DubCheckpoint | None
 
 
 def resolve_dub_command_settings(
@@ -201,6 +204,7 @@ def resolve_dub_command_settings(
         parsed_srt_text_mode,
         parsed_subtitle_embed,
         parsed_until_checkpoint,
+        parsed_start_from_checkpoint,
     ) = validate_resolved_dub_settings(settings)
 
     return ResolvedDubCommandSettings(
@@ -210,4 +214,5 @@ def resolve_dub_command_settings(
         srt_text_mode=parsed_srt_text_mode,
         subtitle_embed=parsed_subtitle_embed,
         until_checkpoint=parsed_until_checkpoint,
+        start_from_checkpoint=parsed_start_from_checkpoint,
     )

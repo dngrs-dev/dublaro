@@ -15,7 +15,13 @@ from dublaro.cli.services.adapter_factories import (
     create_tts_adapter,
 )
 from dublaro.cli_config import ResolvedDubSettings
-from dublaro.pipeline.checkpoints import DubCheckpoint, parse_dub_checkpoint
+from dublaro.pipeline.checkpoints import (
+    STARTABLE_DUB_CHECKPOINTS,
+    DubCheckpoint,
+    checkpoint_index,
+    format_startable_dub_checkpoints,
+    parse_dub_checkpoint,
+)
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
     DubbingProgressCallback,
@@ -82,6 +88,24 @@ def parse_until_checkpoint(checkpoint: str | None) -> DubCheckpoint | None:
         raise typer.BadParameter(str(error)) from error
 
 
+def parse_start_from_checkpoint(checkpoint: str | None) -> DubCheckpoint | None:
+    if checkpoint is None:
+        return None
+
+    try:
+        parsed_checkpoint = parse_dub_checkpoint(checkpoint)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+    if parsed_checkpoint not in STARTABLE_DUB_CHECKPOINTS:
+        raise typer.BadParameter(
+            "Unsupported start checkpoint. "
+            f"Allowed values: {format_startable_dub_checkpoints()}."
+        )
+
+    return parsed_checkpoint
+
+
 def validate_resolved_dub_settings(
     settings: ResolvedDubSettings,
 ) -> tuple[
@@ -90,12 +114,16 @@ def validate_resolved_dub_settings(
     SrtTextMode,
     SubtitleEmbedMode,
     DubCheckpoint | None,
+    DubCheckpoint | None,
 ]:
     parsed_text_workflow = parse_text_workflow_mode(settings.text_workflow)
     parsed_background_mode = parse_background_mode(settings.background_mode)
     parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
     parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
     parsed_until_checkpoint = parse_until_checkpoint(settings.until_checkpoint)
+    parsed_start_from_checkpoint = parse_start_from_checkpoint(
+        settings.start_from_checkpoint
+    )
 
     if (
         parsed_text_workflow == "llm-dubbing"
@@ -110,6 +138,14 @@ def validate_resolved_dub_settings(
 
     if settings.resume and settings.overwrite:
         raise ValueError("--resume cannot be used with --overwrite.")
+
+    if (
+        parsed_start_from_checkpoint is not None
+        and parsed_until_checkpoint is not None
+        and checkpoint_index(parsed_start_from_checkpoint)
+        > checkpoint_index(parsed_until_checkpoint)
+    ):
+        raise ValueError("--start-from cannot be after --until.")
 
     if settings.repair_timing and settings.text_adapter_backend != "ollama":
         raise ValueError("--repair-timing currently requires --text-adapter ollama.")
@@ -126,6 +162,7 @@ def validate_resolved_dub_settings(
         parsed_srt_text_mode,
         parsed_subtitle_embed,
         parsed_until_checkpoint,
+        parsed_start_from_checkpoint,
     )
 
 
@@ -134,6 +171,8 @@ def run_dub_preflight(
     settings: ResolvedDubSettings,
 ) -> DubPreflightReport:
     until_checkpoint = parse_until_checkpoint(settings.until_checkpoint)
+    start_from_checkpoint = parse_start_from_checkpoint(settings.start_from_checkpoint)
+
     return validate_dub_preflight(
         video_path=video_path,
         output_path=settings.output_path,
@@ -165,7 +204,10 @@ def run_dub_preflight(
         write_manifest=settings.write_manifest,
         manifest_output_path=settings.manifest_output_path,
         resume=settings.resume,
-        scope=PreflightScope.from_until_checkpoint(until_checkpoint),
+        scope=PreflightScope.from_checkpoints(
+            start_from_checkpoint=start_from_checkpoint,
+            until_checkpoint=until_checkpoint,
+        ),
     )
 
 
@@ -178,6 +220,7 @@ def run_resolved_dub(
     parsed_srt_text_mode: SrtTextMode,
     parsed_subtitle_embed: SubtitleEmbedMode,
     parsed_until_checkpoint: DubCheckpoint | None,
+    parsed_start_from_checkpoint: DubCheckpoint | None,
     progress_callback: DubbingProgressCallback | None,
 ) -> DubbingArtifacts:
     dubbing_script_adapter = (
@@ -288,6 +331,7 @@ def run_resolved_dub(
         write_manifest=settings.write_manifest,
         manifest_output_path=settings.manifest_output_path,
         until_checkpoint=parsed_until_checkpoint,
+        start_from_checkpoint=parsed_start_from_checkpoint,
         ffmpeg_executable=settings.ffmpeg_executable,
         resume=settings.resume,
         overwrite=settings.overwrite,

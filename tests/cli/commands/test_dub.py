@@ -8,6 +8,7 @@ from dublaro.adapters.source_separation import (
     DemucsSourceSeparationAdapter,
     FakeSourceSeparationAdapter,
 )
+from dublaro.pipeline.dub import DubbingArtifacts
 from typer.testing import CliRunner
 
 cli = import_module("dublaro.cli.app")
@@ -90,6 +91,7 @@ def test_dub_command_runs_full_pipeline(
         write_manifest: bool = True,
         manifest_output_path: Path | None = None,
         until_checkpoint: str | None = None,
+        start_from_checkpoint: str | None = None,
         progress_callback: object | None = None,
         ffmpeg_executable: str = "ffmpeg",
         resume: bool = False,
@@ -141,6 +143,7 @@ def test_dub_command_runs_full_pipeline(
                 "write_manifest": write_manifest,
                 "manifest_output_path": manifest_output_path,
                 "until_checkpoint": until_checkpoint,
+                "start_from_checkpoint": start_from_checkpoint,
                 "progress_callback": progress_callback,
                 "ffmpeg_executable": ffmpeg_executable,
                 "resume": resume,
@@ -254,6 +257,7 @@ def test_dub_command_runs_full_pipeline(
             "write_manifest": True,
             "manifest_output_path": tmp_path / "video.pl.manifest.json",
             "until_checkpoint": None,
+            "start_from_checkpoint": None,
             "progress_callback": cli_command_dub.print_dub_progress,
             "ffmpeg_executable": "ffmpeg-test",
             "resume": False,
@@ -1064,3 +1068,84 @@ def test_dub_command_passes_audio_normalization_options(
     assert calls[0]["target_final_lufs"] == -18.0
     assert calls[0]["final_true_peak"] == -2.0
     assert calls[0]["final_loudness_range"] == 9.0
+
+
+def test_dub_command_passes_start_from_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_video = tmp_path / "video.mp4"
+    output_video = tmp_path / "video.pl.dubbed.mp4"
+    input_video.write_bytes(b"fake video")
+
+    calls: list[dict[str, object]] = []
+
+    def fake_dub_video(
+        video_path: Path,
+        output_path: Path,
+        **kwargs: object,
+    ) -> DubbingArtifacts:
+        calls.append(
+            {
+                "video_path": video_path,
+                "output_path": output_path,
+                **kwargs,
+            }
+        )
+        output_path.write_bytes(b"fake dubbed video")
+        workspace_dir = tmp_path / ".dublaro" / "video"
+
+        return DubbingArtifacts(
+            workspace_dir=workspace_dir,
+            extracted_audio_path=workspace_dir / "video.audio.wav",
+            source_transcript_path=workspace_dir / "video.auto.json",
+            diarized_transcript_path=None,
+            translated_transcript_path=workspace_dir / "video.pl.translated.json",
+            adapted_transcript_path=workspace_dir / "video.pl.adapted.json",
+            synthesized_transcript_path=workspace_dir / "video.pl.synthesized.json",
+            speech_dir=workspace_dir / "video.pl.speech",
+            timing_repaired_transcript_path=None,
+            timing_repaired_speech_dir=None,
+            speech_track_path=workspace_dir / "video.pl.speech.wav",
+            dubbed_video_path=output_path,
+            fitted_transcript_path=None,
+            fitted_speech_dir=None,
+            video_fitted_transcript_path=None,
+            fitted_video_path=None,
+            video_fitted_original_audio_path=None,
+            separated_background_audio_path=None,
+            separated_voice_audio_path=None,
+            video_fitted_background_audio_path=None,
+            mix_original_audio_path=None,
+            mixed_audio_path=None,
+            normalized_audio_path=None,
+            srt_path=None,
+            embedded_srt_path=None,
+            manifest_path=None,
+        )
+
+    monkeypatch.setattr(
+        "dublaro.cli.services.dub_runner.dub_video",
+        fake_dub_video,
+    )
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "dub",
+            str(input_video),
+            "--to",
+            "pl",
+            "--output",
+            str(output_video),
+            "--start-from",
+            "adapted",
+            "--no-preflight",
+            "--overwrite",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls[0]["start_from_checkpoint"] == "adapted"
+    assert calls[0]["resume"] is False
+    assert calls[0]["overwrite"] is True
