@@ -15,13 +15,18 @@ from dublaro.cli.services.adapter_factories import (
     create_tts_adapter,
 )
 from dublaro.cli_config import ResolvedDubSettings
+from dublaro.pipeline.checkpoints import DubCheckpoint, parse_dub_checkpoint
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
     DubbingProgressCallback,
     dub_video,
 )
 from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
-from dublaro.pipeline.preflight import DubPreflightReport, validate_dub_preflight
+from dublaro.pipeline.preflight import (
+    DubPreflightReport,
+    PreflightScope,
+    validate_dub_preflight,
+)
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
 
@@ -67,13 +72,30 @@ def parse_subtitle_embed_mode(mode: str) -> SubtitleEmbedMode:
     return cast(SubtitleEmbedMode, mode)
 
 
+def parse_until_checkpoint(checkpoint: str | None) -> DubCheckpoint | None:
+    if checkpoint is None:
+        return None
+
+    try:
+        return parse_dub_checkpoint(checkpoint)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+
+
 def validate_resolved_dub_settings(
     settings: ResolvedDubSettings,
-) -> tuple[TextWorkflowMode, BackgroundMode, SrtTextMode, SubtitleEmbedMode]:
+) -> tuple[
+    TextWorkflowMode,
+    BackgroundMode,
+    SrtTextMode,
+    SubtitleEmbedMode,
+    DubCheckpoint | None,
+]:
     parsed_text_workflow = parse_text_workflow_mode(settings.text_workflow)
     parsed_background_mode = parse_background_mode(settings.background_mode)
     parsed_srt_text_mode = parse_srt_text_mode(settings.srt_text_mode)
     parsed_subtitle_embed = parse_subtitle_embed_mode(settings.subtitle_embed)
+    parsed_until_checkpoint = parse_until_checkpoint(settings.until_checkpoint)
 
     if (
         parsed_text_workflow == "llm-dubbing"
@@ -103,6 +125,7 @@ def validate_resolved_dub_settings(
         parsed_background_mode,
         parsed_srt_text_mode,
         parsed_subtitle_embed,
+        parsed_until_checkpoint,
     )
 
 
@@ -110,6 +133,7 @@ def run_dub_preflight(
     video_path: Path,
     settings: ResolvedDubSettings,
 ) -> DubPreflightReport:
+    until_checkpoint = parse_until_checkpoint(settings.until_checkpoint)
     return validate_dub_preflight(
         video_path=video_path,
         output_path=settings.output_path,
@@ -141,6 +165,7 @@ def run_dub_preflight(
         write_manifest=settings.write_manifest,
         manifest_output_path=settings.manifest_output_path,
         resume=settings.resume,
+        scope=PreflightScope.from_until_checkpoint(until_checkpoint),
     )
 
 
@@ -152,6 +177,7 @@ def run_resolved_dub(
     parsed_background_mode: BackgroundMode,
     parsed_srt_text_mode: SrtTextMode,
     parsed_subtitle_embed: SubtitleEmbedMode,
+    parsed_until_checkpoint: DubCheckpoint | None,
     progress_callback: DubbingProgressCallback | None,
 ) -> DubbingArtifacts:
     dubbing_script_adapter = (
@@ -261,6 +287,7 @@ def run_resolved_dub(
         progress_callback=progress_callback,
         write_manifest=settings.write_manifest,
         manifest_output_path=settings.manifest_output_path,
+        until_checkpoint=parsed_until_checkpoint,
         ffmpeg_executable=settings.ffmpeg_executable,
         resume=settings.resume,
         overwrite=settings.overwrite,

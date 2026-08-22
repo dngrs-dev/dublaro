@@ -10,6 +10,7 @@ from dublaro.adapters.source_separation import SourceSeparationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
+from dublaro.pipeline.checkpoints import DubCheckpoint
 from dublaro.pipeline.dub_plan import (
     BackgroundMode,
     DubAdapters,
@@ -23,19 +24,21 @@ from dublaro.pipeline.dub_stages import (
     DubbingProgressStep,
     DubRunContext,
     ManifestInputs,
+    _adapt_translated_text,
     _align_speech_track,
     _diarize_source_transcript,
     _export_video,
     _extract_audio,
     _fit_speech_to_timing,
     _fit_video_to_speech,
+    _generate_llm_dubbing_script,
     _normalize_audio_for_export,
     _prepare_audio_for_export,
     _prepare_subtitles_for_export,
-    _prepare_text_for_dubbing,
     _repair_speech_timing,
     _synthesize_speech,
     _transcribe_source_audio,
+    _translate_source_transcript,
     _write_manifest,
 )
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
@@ -78,6 +81,91 @@ class DubbingArtifacts:
     srt_path: Path | None
     embedded_srt_path: Path | None
     manifest_path: Path | None
+    stopped_at_checkpoint: DubCheckpoint | None = None
+
+    @property
+    def completed(self) -> bool:
+        return self.stopped_at_checkpoint is None
+
+
+@dataclass
+class DubRunState:
+    extracted_audio_path: Path
+    source_transcript_path: Path
+    translated_transcript_path: Path
+    adapted_transcript_path: Path
+    synthesized_transcript_path: Path
+    speech_dir: Path
+    speech_track_path: Path
+    dubbed_video_path: Path
+    diarized_transcript_path: Path | None = None
+    timing_repaired_transcript_path: Path | None = None
+    timing_repaired_speech_dir: Path | None = None
+    fitted_transcript_path: Path | None = None
+    fitted_speech_dir: Path | None = None
+    video_fitted_transcript_path: Path | None = None
+    fitted_video_path: Path | None = None
+    video_fitted_original_audio_path: Path | None = None
+    separated_background_audio_path: Path | None = None
+    separated_voice_audio_path: Path | None = None
+    video_fitted_background_audio_path: Path | None = None
+    mix_original_audio_path: Path | None = None
+    mixed_audio_path: Path | None = None
+    normalized_audio_path: Path | None = None
+    srt_path: Path | None = None
+    embedded_srt_path: Path | None = None
+    manifest_path: Path | None = None
+
+    @classmethod
+    def initial(cls, context: DubRunContext) -> "DubRunState":
+        artifact_paths = context.artifact_paths
+
+        return cls(
+            extracted_audio_path=artifact_paths.extracted_audio_path,
+            source_transcript_path=artifact_paths.source_transcript_path,
+            translated_transcript_path=artifact_paths.translated_transcript_path,
+            adapted_transcript_path=artifact_paths.adapted_transcript_path,
+            synthesized_transcript_path=artifact_paths.synthesized_transcript_path,
+            speech_dir=artifact_paths.speech_dir,
+            speech_track_path=artifact_paths.speech_track_path,
+            dubbed_video_path=context.paths.output_path,
+        )
+
+    def artifacts(
+        self,
+        context: DubRunContext,
+        *,
+        stopped_at_checkpoint: DubCheckpoint | None = None,
+    ) -> DubbingArtifacts:
+        return DubbingArtifacts(
+            workspace_dir=context.paths.workspace_dir,
+            extracted_audio_path=self.extracted_audio_path,
+            source_transcript_path=self.source_transcript_path,
+            diarized_transcript_path=self.diarized_transcript_path,
+            translated_transcript_path=self.translated_transcript_path,
+            adapted_transcript_path=self.adapted_transcript_path,
+            synthesized_transcript_path=self.synthesized_transcript_path,
+            speech_dir=self.speech_dir,
+            timing_repaired_transcript_path=self.timing_repaired_transcript_path,
+            timing_repaired_speech_dir=self.timing_repaired_speech_dir,
+            speech_track_path=self.speech_track_path,
+            dubbed_video_path=self.dubbed_video_path,
+            fitted_transcript_path=self.fitted_transcript_path,
+            fitted_speech_dir=self.fitted_speech_dir,
+            video_fitted_transcript_path=self.video_fitted_transcript_path,
+            fitted_video_path=self.fitted_video_path,
+            video_fitted_original_audio_path=self.video_fitted_original_audio_path,
+            separated_background_audio_path=self.separated_background_audio_path,
+            separated_voice_audio_path=self.separated_voice_audio_path,
+            video_fitted_background_audio_path=self.video_fitted_background_audio_path,
+            mix_original_audio_path=self.mix_original_audio_path,
+            mixed_audio_path=self.mixed_audio_path,
+            normalized_audio_path=self.normalized_audio_path,
+            srt_path=self.srt_path,
+            embedded_srt_path=self.embedded_srt_path,
+            manifest_path=self.manifest_path,
+            stopped_at_checkpoint=stopped_at_checkpoint,
+        )
 
 
 def dub_video(
@@ -130,6 +218,7 @@ def dub_video(
     subtitle_embed: SubtitleEmbedMode = "none",
     write_manifest: bool = True,
     manifest_output_path: str | Path | None = None,
+    until_checkpoint: DubCheckpoint | None = None,
     progress_callback: DubbingProgressCallback | None = None,
     ffmpeg_executable: str = "ffmpeg",
     resume: bool = False,
@@ -190,6 +279,7 @@ def dub_video(
         manifest_output_path=(
             Path(manifest_output_path) if manifest_output_path is not None else None
         ),
+        until_checkpoint=until_checkpoint,
         ffmpeg_executable=ffmpeg_executable,
         resume=resume,
         overwrite=overwrite,
@@ -219,147 +309,176 @@ def dub_video(
 def _run_dub_video(context: DubRunContext) -> DubbingArtifacts:
     started_at = datetime.now(UTC)
 
-    artifact_paths = context.artifact_paths
     workspace = context.paths.workspace_dir
     workspace.mkdir(parents=True, exist_ok=True)
 
-    extracted_audio_path = _extract_audio(context)
-    source_transcript_path = artifact_paths.source_transcript_path
-    diarized_transcript_path = (
-        artifact_paths.diarized_transcript_path if context.options.diarize else None
-    )
-    translated_transcript_path = artifact_paths.translated_transcript_path
-    adapted_transcript_path = artifact_paths.adapted_transcript_path
-    synthesized_transcript_path = artifact_paths.synthesized_transcript_path
-    speech_dir = artifact_paths.speech_dir
-    timing_repaired_transcript_path = None
-    timing_repaired_speech_dir = None
-    speech_track_path = artifact_paths.speech_track_path
+    state = DubRunState.initial(context)
 
-    source_transcript = _transcribe_source_audio(context, extracted_audio_path)
+    state.extracted_audio_path = _extract_audio(context)
+    if stopped := _stop_if_requested(context, state, "audio"):
+        return stopped
+
+    source_transcript = _transcribe_source_audio(context, state.extracted_audio_path)
+    if stopped := _stop_if_requested(context, state, "transcribed"):
+        return stopped
+
     source_transcript = _diarize_source_transcript(
         context,
-        extracted_audio_path,
+        state.extracted_audio_path,
         source_transcript,
     )
+    if context.options.diarize:
+        state.diarized_transcript_path = context.artifact_paths.diarized_transcript_path
 
-    text_workflow = _prepare_text_for_dubbing(context, source_transcript)
-    translated_transcript = text_workflow.translated_transcript
-    adapted_transcript = text_workflow.adapted_transcript
+    if stopped := _stop_if_requested(context, state, "diarized"):
+        return stopped
+
+    if context.options.text_workflow == "translate-then-adapt":
+        translated_transcript = _translate_source_transcript(context, source_transcript)
+        if stopped := _stop_if_requested(context, state, "translated"):
+            return stopped
+
+        adapted_transcript = _adapt_translated_text(context, translated_transcript)
+    elif context.options.text_workflow == "llm-dubbing":
+        text_workflow = _generate_llm_dubbing_script(context, source_transcript)
+        translated_transcript = text_workflow.translated_transcript
+        adapted_transcript = text_workflow.adapted_transcript
+
+        if stopped := _stop_if_requested(context, state, "translated"):
+            return stopped
+    else:
+        raise ValueError(f"Unsupported text workflow: {context.options.text_workflow}")
+
+    if stopped := _stop_if_requested(context, state, "adapted"):
+        return stopped
 
     synthesized_transcript = _synthesize_speech(context, adapted_transcript)
+    if stopped := _stop_if_requested(context, state, "synthesized"):
+        return stopped
 
     timing_repair = _repair_speech_timing(context, synthesized_transcript)
-    timing_repaired_transcript_path = timing_repair.timing_repaired_transcript_path
-    timing_repaired_speech_dir = timing_repair.timing_repaired_speech_dir
+    state.timing_repaired_transcript_path = (
+        timing_repair.timing_repaired_transcript_path
+    )
+    state.timing_repaired_speech_dir = timing_repair.timing_repaired_speech_dir
+
+    if stopped := _stop_if_requested(context, state, "timing-repaired"):
+        return stopped
 
     speech_timing = _fit_speech_to_timing(context, timing_repair.transcript)
     speech_timeline_transcript = speech_timing.transcript
-    fitted_transcript_path = speech_timing.fitted_transcript_path
-    fitted_speech_dir = speech_timing.fitted_speech_dir
+    state.fitted_transcript_path = speech_timing.fitted_transcript_path
+    state.fitted_speech_dir = speech_timing.fitted_speech_dir
+
+    if stopped := _stop_if_requested(context, state, "fitted"):
+        return stopped
 
     video_fit = _fit_video_to_speech(context, speech_timing.transcript)
     speech_timeline_transcript = video_fit.transcript
     video_for_export_path = video_fit.video_path
-    video_fitted_transcript_path = video_fit.video_fitted_transcript_path
-    fitted_video_path = video_fit.fitted_video_path
+    state.video_fitted_transcript_path = video_fit.video_fitted_transcript_path
+    state.fitted_video_path = video_fit.fitted_video_path
 
-    speech_track_path = _align_speech_track(context, speech_timeline_transcript)
+    if stopped := _stop_if_requested(context, state, "video-fitted"):
+        return stopped
+
+    state.speech_track_path = _align_speech_track(context, speech_timeline_transcript)
+    if stopped := _stop_if_requested(context, state, "aligned"):
+        return stopped
 
     export_audio = _prepare_audio_for_export(
         context,
         speech_timeline_transcript,
-        speech_track_path,
+        state.speech_track_path,
         video_slowdown_factor=video_fit.slowdown_factor,
     )
+    state.mix_original_audio_path = export_audio.mix_original_audio_path
+    state.mixed_audio_path = export_audio.mixed_audio_path
+    state.video_fitted_original_audio_path = (
+        export_audio.video_fitted_original_audio_path
+    )
+    state.separated_background_audio_path = export_audio.separated_background_audio_path
+    state.separated_voice_audio_path = export_audio.separated_voice_audio_path
+    state.video_fitted_background_audio_path = (
+        export_audio.video_fitted_background_audio_path
+    )
+
+    if stopped := _stop_if_requested(context, state, "mixed"):
+        return stopped
+
     audio_normalization = _normalize_audio_for_export(
         context,
         export_audio.audio_path,
     )
     audio_for_export_path = audio_normalization.audio_path
-    normalized_audio_path = audio_normalization.normalized_audio_path
-    mix_original_audio_path = export_audio.mix_original_audio_path
-    mixed_audio_path = export_audio.mixed_audio_path
-    video_fitted_original_audio_path = export_audio.video_fitted_original_audio_path
+    state.normalized_audio_path = audio_normalization.normalized_audio_path
 
-    separated_background_audio_path = export_audio.separated_background_audio_path
-    separated_voice_audio_path = export_audio.separated_voice_audio_path
-    video_fitted_background_audio_path = export_audio.video_fitted_background_audio_path
+    if stopped := _stop_if_requested(context, state, "normalized"):
+        return stopped
 
     subtitle_export = _prepare_subtitles_for_export(
         context,
         speech_timeline_transcript,
     )
+    state.srt_path = subtitle_export.sidecar_srt_path
+    state.embedded_srt_path = subtitle_export.embedded_srt_path
 
-    dubbed_video_path = _export_video(
+    if stopped := _stop_if_requested(context, state, "subtitles"):
+        return stopped
+
+    state.dubbed_video_path = _export_video(
         context,
         video_for_export_path,
         audio_for_export_path,
-        subtitle_export.embedded_srt_path,
+        state.embedded_srt_path,
     )
 
-    srt_path = subtitle_export.sidecar_srt_path
-    embedded_srt_path = subtitle_export.embedded_srt_path
+    if stopped := _stop_if_requested(context, state, "exported"):
+        return stopped
 
     manifest_inputs = ManifestInputs(
         started_at=started_at,
-        extracted_audio_path=extracted_audio_path,
-        source_transcript_path=source_transcript_path,
-        diarized_transcript_path=diarized_transcript_path,
-        translated_transcript_path=translated_transcript_path,
-        adapted_transcript_path=adapted_transcript_path,
-        synthesized_transcript_path=synthesized_transcript_path,
-        timing_repaired_transcript_path=timing_repaired_transcript_path,
-        timing_repaired_speech_dir=timing_repaired_speech_dir,
-        speech_dir=speech_dir,
-        speech_track_path=speech_track_path,
-        dubbed_video_path=dubbed_video_path,
-        fitted_transcript_path=fitted_transcript_path,
-        fitted_speech_dir=fitted_speech_dir,
-        video_fitted_transcript_path=video_fitted_transcript_path,
-        fitted_video_path=fitted_video_path,
-        video_fitted_original_audio_path=video_fitted_original_audio_path,
-        separated_background_audio_path=separated_background_audio_path,
-        separated_voice_audio_path=separated_voice_audio_path,
-        video_fitted_background_audio_path=video_fitted_background_audio_path,
-        mix_original_audio_path=mix_original_audio_path,
-        mixed_audio_path=mixed_audio_path,
-        normalized_audio_path=normalized_audio_path,
-        srt_path=srt_path,
-        embedded_srt_path=embedded_srt_path,
+        extracted_audio_path=state.extracted_audio_path,
+        source_transcript_path=state.source_transcript_path,
+        diarized_transcript_path=state.diarized_transcript_path,
+        translated_transcript_path=state.translated_transcript_path,
+        adapted_transcript_path=state.adapted_transcript_path,
+        synthesized_transcript_path=state.synthesized_transcript_path,
+        timing_repaired_transcript_path=state.timing_repaired_transcript_path,
+        timing_repaired_speech_dir=state.timing_repaired_speech_dir,
+        speech_dir=state.speech_dir,
+        speech_track_path=state.speech_track_path,
+        dubbed_video_path=state.dubbed_video_path,
+        fitted_transcript_path=state.fitted_transcript_path,
+        fitted_speech_dir=state.fitted_speech_dir,
+        video_fitted_transcript_path=state.video_fitted_transcript_path,
+        fitted_video_path=state.fitted_video_path,
+        video_fitted_original_audio_path=state.video_fitted_original_audio_path,
+        separated_background_audio_path=state.separated_background_audio_path,
+        separated_voice_audio_path=state.separated_voice_audio_path,
+        video_fitted_background_audio_path=state.video_fitted_background_audio_path,
+        mix_original_audio_path=state.mix_original_audio_path,
+        mixed_audio_path=state.mixed_audio_path,
+        normalized_audio_path=state.normalized_audio_path,
+        srt_path=state.srt_path,
+        embedded_srt_path=state.embedded_srt_path,
         source_transcript=source_transcript,
         translated_transcript=translated_transcript,
         adapted_transcript=adapted_transcript,
         synthesized_transcript=synthesized_transcript,
         speech_timeline_transcript=speech_timeline_transcript,
     )
-    manifest_path = _write_manifest(context, manifest_inputs)
+    state.manifest_path = _write_manifest(context, manifest_inputs)
 
-    return DubbingArtifacts(
-        workspace_dir=workspace,
-        extracted_audio_path=extracted_audio_path,
-        source_transcript_path=source_transcript_path,
-        diarized_transcript_path=diarized_transcript_path,
-        translated_transcript_path=translated_transcript_path,
-        adapted_transcript_path=adapted_transcript_path,
-        synthesized_transcript_path=synthesized_transcript_path,
-        speech_dir=speech_dir,
-        timing_repaired_transcript_path=timing_repaired_transcript_path,
-        timing_repaired_speech_dir=timing_repaired_speech_dir,
-        speech_track_path=speech_track_path,
-        dubbed_video_path=dubbed_video_path,
-        fitted_transcript_path=fitted_transcript_path,
-        fitted_speech_dir=fitted_speech_dir,
-        video_fitted_transcript_path=video_fitted_transcript_path,
-        fitted_video_path=fitted_video_path,
-        video_fitted_original_audio_path=video_fitted_original_audio_path,
-        separated_background_audio_path=separated_background_audio_path,
-        separated_voice_audio_path=separated_voice_audio_path,
-        video_fitted_background_audio_path=video_fitted_background_audio_path,
-        mix_original_audio_path=mix_original_audio_path,
-        mixed_audio_path=mixed_audio_path,
-        normalized_audio_path=normalized_audio_path,
-        srt_path=srt_path,
-        embedded_srt_path=embedded_srt_path,
-        manifest_path=manifest_path,
-    )
+    return state.artifacts(context)
+
+
+def _stop_if_requested(
+    context: DubRunContext,
+    state: DubRunState,
+    checkpoint: DubCheckpoint,
+) -> DubbingArtifacts | None:
+    if context.options.until_checkpoint != checkpoint:
+        return None
+
+    return state.artifacts(context, stopped_at_checkpoint=checkpoint)

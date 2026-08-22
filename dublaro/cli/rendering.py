@@ -17,6 +17,10 @@ from dublaro.cli.reports.preview import (
 from dublaro.cli.reports.workspace import WorkspaceInspectionReport
 from dublaro.cli.services.batch import BatchDubJob, BatchDubResult
 from dublaro.cli_config import ResolvedDubSettings
+from dublaro.pipeline.checkpoints import (
+    dub_checkpoint_artifact_name,
+    parse_dub_checkpoint,
+)
 from dublaro.pipeline.dub import (
     DubbingArtifacts,
     DubbingProgressStatus,
@@ -135,6 +139,21 @@ def _optional_artifact_path(artifacts: object, name: str) -> Path | None:
     return value if isinstance(value, Path) else None
 
 
+def _checkpoint_artifact_path(
+    artifacts: object,
+    checkpoint: str,
+) -> Path | None:
+    try:
+        parsed_checkpoint = parse_dub_checkpoint(checkpoint)
+    except ValueError:
+        return None
+
+    return _optional_artifact_path(
+        artifacts,
+        dub_checkpoint_artifact_name(parsed_checkpoint),
+    )
+
+
 def print_dub_progress(
     step: DubbingProgressStep,
     status: DubbingProgressStatus,
@@ -154,6 +173,26 @@ def print_dub_progress(
 
 
 def print_dub_artifacts(artifacts: DubbingArtifacts) -> None:
+    stopped_at_checkpoint = getattr(artifacts, "stopped_at_checkpoint", None)
+
+    if stopped_at_checkpoint is not None:
+        console.print(f"[green]Stopped at checkpoint:[/green] {stopped_at_checkpoint}")
+        console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
+
+        checkpoint_artifact_path = _checkpoint_artifact_path(
+            artifacts,
+            str(stopped_at_checkpoint),
+        )
+        if checkpoint_artifact_path is not None:
+            console.print(
+                f"[green]Checkpoint artifact:[/green] {checkpoint_artifact_path}"
+            )
+
+        console.print(
+            "[yellow]Edit the artifact, then continue with --resume.[/yellow]"
+        )
+        return
+
     console.print(f"[green]Dubbed video saved:[/green] {artifacts.dubbed_video_path}")
     console.print(f"[green]Workspace:[/green] {artifacts.workspace_dir}")
 

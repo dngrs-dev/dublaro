@@ -10,6 +10,7 @@ from dublaro.adapters.source_separation import SourceSeparationAdapter
 from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
+from dublaro.pipeline.checkpoints import DUB_CHECKPOINTS, DubCheckpoint
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 from dublaro.pipeline.voices import SpeakerVoice
 
@@ -68,6 +69,7 @@ class DubOptions:
     subtitle_embed: SubtitleEmbedMode = "none"
     write_manifest: bool = True
     manifest_output_path: Path | None = None
+    until_checkpoint: DubCheckpoint | None = None
     ffmpeg_executable: str = "ffmpeg"
     resume: bool = False
     overwrite: bool = False
@@ -119,6 +121,51 @@ class DubOptions:
 
         if self.final_loudness_range <= 0:
             raise ValueError("final_loudness_range must be > 0")
+
+        if (
+            self.until_checkpoint is not None
+            and self.until_checkpoint not in DUB_CHECKPOINTS
+        ):
+            raise ValueError("Invalid dub checkpoint.")
+
+        if self.until_checkpoint == "diarized" and not self.diarize:
+            raise ValueError("until_checkpoint='diarized' requires diarize=True.")
+
+        if self.until_checkpoint == "timing-repaired" and not self.repair_timing:
+            raise ValueError(
+                "until_checkpoint='timing-repaired' requires repair_timing=True."
+            )
+
+        if self.until_checkpoint == "fitted" and not self.fit_speech:
+            raise ValueError("until_checkpoint='fitted' requires fit_speech=True.")
+
+        if self.until_checkpoint == "video-fitted" and not self.fit_video:
+            raise ValueError("until_checkpoint='video-fitted' requires fit_video=True.")
+
+        if self.until_checkpoint == "mixed" and self.background_mode == "speech-only":
+            raise ValueError(
+                "until_checkpoint='mixed' requires background audio mixing."
+            )
+
+        if self.until_checkpoint == "normalized" and not self.normalize_final_audio:
+            raise ValueError(
+                "until_checkpoint='normalized' requires normalize_final_audio=True."
+            )
+
+        if (
+            self.until_checkpoint == "subtitles"
+            and not self.export_srt
+            and self.subtitle_embed == "none"
+        ):
+            raise ValueError(
+                "until_checkpoint='subtitles' requires export_srt=True "
+                "or subtitle_embed != 'none'."
+            )
+
+        if self.until_checkpoint == "manifest" and not self.write_manifest:
+            raise ValueError(
+                "until_checkpoint='manifest' requires write_manifest=True."
+            )
 
 
 @dataclass(frozen=True)

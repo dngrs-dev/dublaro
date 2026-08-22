@@ -171,6 +171,60 @@ def test_dub_video_runs_full_pipeline(
     assert synthesized.segments[0].generated_audio_path is not None
 
 
+def test_dub_video_can_stop_at_adapted_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    video_path = tmp_path / "lesson.mp4"
+    output_path = tmp_path / "lesson.pl.dubbed.mp4"
+    workspace_dir = tmp_path / "workspace"
+
+    video_path.write_bytes(b"fake video")
+
+    def fake_extract_audio_from_video(
+        input_path: str | Path,
+        output_path: str | Path | None = None,
+        *,
+        sample_rate: int = 16_000,
+        channels: int = 1,
+        overwrite: bool = False,
+        executable: str = "ffmpeg",
+    ) -> Path:
+        output_file = Path(output_path or Path(input_path).with_suffix(".wav"))
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_bytes(b"fake audio")
+        return output_file
+
+    monkeypatch.setattr(
+        dub_stages,
+        "extract_audio_from_video",
+        fake_extract_audio_from_video,
+    )
+
+    artifacts = dub_video(
+        video_path,
+        output_path,
+        source_language="en",
+        target_language="pl",
+        workspace_dir=workspace_dir,
+        asr_adapter=FakeAsrAdapter(),
+        translation_adapter=FakeTranslationAdapter(),
+        text_adapter=FakeTextAdapter(),
+        tts_adapter=ExplodingTtsAdapter(),
+        until_checkpoint="adapted",
+        overwrite=True,
+    )
+
+    assert artifacts.stopped_at_checkpoint == "adapted"
+    assert artifacts.completed is False
+    assert artifacts.extracted_audio_path.exists()
+    assert artifacts.source_transcript_path.exists()
+    assert artifacts.translated_transcript_path.exists()
+    assert artifacts.adapted_transcript_path.exists()
+    assert not artifacts.synthesized_transcript_path.exists()
+    assert not output_path.exists()
+
+
 def test_dub_video_can_fit_speech_before_alignment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -102,6 +102,17 @@ def dub(
             help="Reuse valid intermediate workspace artifacts.",
         ),
     ] = None,
+    until_checkpoint: Annotated[
+        str | None,
+        typer.Option(
+            "--until",
+            help=(
+                "Stop after checkpoint: audio, transcribed, diarized, translated, "
+                "adapted, synthesized, timing-repaired, fitted, video-fitted, "
+                "aligned, mixed, normalized, subtitles, exported, manifest."
+            ),
+        ),
+    ] = None,
     asr_backend: Annotated[
         str | None,
         typer.Option(
@@ -565,6 +576,7 @@ def dub(
                 output_dir=output_dir,
                 workspace_dir=workspace_dir,
                 resume_enabled=resume_enabled,
+                until_checkpoint=until_checkpoint,
                 overwrite=overwrite,
                 preflight_enabled=preflight_enabled,
                 ffmpeg_executable=ffmpeg_executable,
@@ -656,6 +668,7 @@ def dub(
             parsed_background_mode=resolved_dub.background_mode,
             parsed_srt_text_mode=resolved_dub.srt_text_mode,
             parsed_subtitle_embed=resolved_dub.subtitle_embed,
+            parsed_until_checkpoint=resolved_dub.until_checkpoint,
             progress_callback=print_dub_progress,
         )
     except (

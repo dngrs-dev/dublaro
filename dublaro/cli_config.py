@@ -99,6 +99,7 @@ class DubCliOverrides:
     subtitle_embed: str | None = None
     write_manifest: bool | None = None
     manifest_output_path: Path | None = None
+    until_checkpoint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,7 @@ class ResolvedDubSettings:
     subtitle_embed: str
     write_manifest: bool
     manifest_output_path: Path | None
+    until_checkpoint: str | None
 
 
 def _select(cli_value: T | None, config_value: T | None, default: T) -> T:
@@ -724,4 +726,5 @@ def resolve_dub_settings(
             config.manifest.output_path,
             base_dir,
         ),
+        until_checkpoint=overrides.until_checkpoint,
     )

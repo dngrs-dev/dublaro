@@ -203,6 +203,7 @@ def run_batch_dubbing(
                 parsed_background_mode,
                 parsed_srt_text_mode,
                 parsed_subtitle_embed,
+                parsed_until_checkpoint,
             ) = validate_resolved_dub_settings(settings)
 
             if on_job_started is not None:
@@ -242,6 +243,7 @@ def run_batch_dubbing(
                 parsed_background_mode=parsed_background_mode,
                 parsed_srt_text_mode=parsed_srt_text_mode,
                 parsed_subtitle_embed=parsed_subtitle_embed,
+                parsed_until_checkpoint=parsed_until_checkpoint,
                 progress_callback=on_dub_progress,
             )
 

@@ -1104,6 +1104,7 @@ def _write_manifest(
                 ffmpeg_executable=run_options.ffmpeg_executable,
                 resume=run_options.resume,
                 overwrite=run_options.overwrite,
+                until_checkpoint=run_options.until_checkpoint,
             ),
             artifacts=DubbingArtifactsManifest(
                 workspace_dir=str(context.paths.workspace_dir),

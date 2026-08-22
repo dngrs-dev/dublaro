@@ -101,6 +101,7 @@ class DubbingOptionsManifest(BaseModel):
     subtitle_embed: str
     ffmpeg_executable: str
     overwrite: bool
+    until_checkpoint: str | None = None
 
 
 class DubbingArtifactsManifest(BaseModel):

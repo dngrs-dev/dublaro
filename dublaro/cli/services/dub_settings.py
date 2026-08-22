@@ -8,6 +8,7 @@ from dublaro.cli_config import (
     resolve_dub_settings,
 )
 from dublaro.config import load_config
+from dublaro.pipeline.checkpoints import DubCheckpoint
 from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
@@ -86,6 +87,7 @@ class DubCommandOverrides:
     subtitle_embed: str | None = None
     write_manifest_enabled: bool | None = None
     manifest_output_path: Path | None = None
+    until_checkpoint: str | None = None
 
     def to_cli_overrides(self) -> DubCliOverrides:
         return DubCliOverrides(
@@ -167,6 +169,7 @@ class DubCommandOverrides:
             subtitle_embed=self.subtitle_embed,
             write_manifest=self.write_manifest_enabled,
             manifest_output_path=self.manifest_output_path,
+            until_checkpoint=self.until_checkpoint,
         )
 
 
@@ -177,6 +180,7 @@ class ResolvedDubCommandSettings:
     background_mode: BackgroundMode
     srt_text_mode: SrtTextMode
     subtitle_embed: SubtitleEmbedMode
+    until_checkpoint: DubCheckpoint | None
 
 
 def resolve_dub_command_settings(
@@ -196,6 +200,7 @@ def resolve_dub_command_settings(
         parsed_background_mode,
         parsed_srt_text_mode,
         parsed_subtitle_embed,
+        parsed_until_checkpoint,
     ) = validate_resolved_dub_settings(settings)
 
     return ResolvedDubCommandSettings(
@@ -204,4 +209,5 @@ def resolve_dub_command_settings(
         background_mode=parsed_background_mode,
         srt_text_mode=parsed_srt_text_mode,
         subtitle_embed=parsed_subtitle_embed,
+        until_checkpoint=parsed_until_checkpoint,
     )
