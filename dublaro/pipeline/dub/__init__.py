@@ -1,3 +1,4 @@
+from dublaro.pipeline.dub.artifacts import DubbingArtifacts
 from dublaro.pipeline.dub.options import (
     BackgroundMode,
     DubAdapters,
@@ -7,7 +8,6 @@ from dublaro.pipeline.dub.options import (
     TextWorkflowMode,
 )
 from dublaro.pipeline.dub.runner import (
-    DubbingArtifacts,
     DubbingProgressCallback,
     DubbingProgressStatus,
     DubbingProgressStep,
