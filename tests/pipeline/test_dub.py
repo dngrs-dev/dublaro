@@ -14,6 +14,7 @@ from dublaro.adapters.tts import FakeTtsAdapter
 from dublaro.audio.wav import write_mono_pcm16_wav
 from dublaro.pipeline import dub_stages
 from dublaro.pipeline.dub import dub_video
+from dublaro.pipeline.dub.stages import audio as dub_audio_stages
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
 from dublaro.pipeline.voices import SpeakerVoice
 from dublaro.schemas import Segment, Transcript, VoiceProfile
@@ -122,7 +123,7 @@ def test_dub_video_runs_full_pipeline(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -196,7 +197,7 @@ def test_dub_video_can_stop_at_adapted_checkpoint(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -305,7 +306,7 @@ def test_dub_video_can_fit_speech_before_alignment(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages, "extract_audio_from_video", fake_extract_audio_from_video
+        dub_audio_stages, "extract_audio_from_video", fake_extract_audio_from_video
     )
     monkeypatch.setattr(
         dub_stages,
@@ -464,7 +465,7 @@ def test_dub_video_can_fit_video_after_capped_speech_fitting(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -628,12 +629,12 @@ def test_dub_video_can_mix_original_audio_before_export(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "mix_original_audio_with_dubbed_speech",
         fake_mix_original_audio_with_dubbed_speech,
     )
@@ -790,12 +791,12 @@ def test_dub_video_can_normalize_final_audio_before_export(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "normalize_audio_loudness",
         fake_normalize_audio_loudness,
     )
@@ -904,7 +905,7 @@ def test_dub_video_can_export_srt(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -987,7 +988,7 @@ def test_dub_video_can_soft_embed_subtitles_without_sidecar_srt(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -1065,7 +1066,7 @@ def test_dub_video_reports_progress(
         events.append((step, status, message))
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
@@ -1168,7 +1169,7 @@ def test_dub_video_writes_manifest_by_default(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages, "extract_audio_from_video", fake_extract_audio_from_video
+        dub_audio_stages, "extract_audio_from_video", fake_extract_audio_from_video
     )
     monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
 
@@ -1354,7 +1355,7 @@ def test_dub_video_resumes_intermediate_artifacts_but_regenerates_final_video(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fail_extract_audio_from_video,
     )
@@ -1445,7 +1446,7 @@ def test_dub_video_can_use_llm_dubbing_text_workflow(
         return output_file
 
     monkeypatch.setattr(
-        dub_stages,
+        dub_audio_stages,
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )

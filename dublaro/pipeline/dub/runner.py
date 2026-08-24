@@ -25,16 +25,18 @@ from dublaro.pipeline.dub.progress import (
     DubbingProgressStep,
 )
 from dublaro.pipeline.dub.results import ManifestInputs
+from dublaro.pipeline.dub.stages.audio import (
+    _extract_audio,
+    _normalize_audio_for_export,
+    _prepare_audio_for_export,
+)
 from dublaro.pipeline.dub_stages import (
     _adapt_translated_text,
     _align_speech_track,
     _diarize_source_transcript,
     _export_video,
-    _extract_audio,
     _fit_speech_to_timing,
     _fit_video_to_speech,
-    _normalize_audio_for_export,
-    _prepare_audio_for_export,
     _prepare_subtitles_for_export,
     _prepare_text_for_dubbing,
     _repair_speech_timing,
