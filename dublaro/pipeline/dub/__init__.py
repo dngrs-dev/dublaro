@@ -7,12 +7,12 @@ from dublaro.pipeline.dub.options import (
     DubPaths,
     TextWorkflowMode,
 )
-from dublaro.pipeline.dub.runner import (
+from dublaro.pipeline.dub.progress import (
     DubbingProgressCallback,
     DubbingProgressStatus,
     DubbingProgressStep,
-    dub_video,
 )
+from dublaro.pipeline.dub.runner import dub_video
 
 __all__ = [
     "BackgroundMode",

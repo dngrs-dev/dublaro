@@ -11,6 +11,7 @@ from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
 from dublaro.pipeline.checkpoints import DubCheckpoint
 from dublaro.pipeline.dub.artifacts import DubbingArtifacts, DubRunState
+from dublaro.pipeline.dub.context import DubRunContext
 from dublaro.pipeline.dub.options import (
     BackgroundMode,
     DubAdapters,
@@ -18,12 +19,13 @@ from dublaro.pipeline.dub.options import (
     DubPaths,
     TextWorkflowMode,
 )
-from dublaro.pipeline.dub_stages import (
+from dublaro.pipeline.dub.progress import (
     DubbingProgressCallback,
     DubbingProgressStatus,
     DubbingProgressStep,
-    DubRunContext,
-    ManifestInputs,
+)
+from dublaro.pipeline.dub.results import ManifestInputs
+from dublaro.pipeline.dub_stages import (
     _adapt_translated_text,
     _align_speech_track,
     _diarize_source_transcript,

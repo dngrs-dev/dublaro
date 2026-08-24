@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dublaro.pipeline.checkpoints import DubCheckpoint
-from dublaro.pipeline.dub_stages import DubRunContext
+from dublaro.pipeline.dub.context import DubRunContext
 
 
 @dataclass(frozen=True)

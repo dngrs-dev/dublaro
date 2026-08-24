@@ -1,9 +1,6 @@
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
 
 from dublaro.adapters.asr import TranscriptionOptions
 from dublaro.adapters.diarization import DiarizationOptions
@@ -16,11 +13,22 @@ from dublaro.audio.ffmpeg import (
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.diarize import diarize_transcript
-from dublaro.pipeline.dub.options import (
-    DubAdapters,
-    DubArtifactPaths,
-    DubOptions,
-    DubPaths,
+from dublaro.pipeline.dub.context import DubRunContext
+from dublaro.pipeline.dub.progress import (
+    progress_skipped as _progress_skipped,
+)
+from dublaro.pipeline.dub.progress import (
+    progress_stage as _progress_stage,
+)
+from dublaro.pipeline.dub.results import (
+    AudioNormalizationResult,
+    ExportAudioResult,
+    ManifestInputs,
+    SpeechTimingResult,
+    SubtitleExportResult,
+    TextWorkflowResult,
+    TimingRepairResult,
+    VideoFitResult,
 )
 from dublaro.pipeline.dubbing_script import generate_dubbing_script_transcripts
 from dublaro.pipeline.export import export_dubbed_video
@@ -45,158 +53,6 @@ from dublaro.pipeline.timing_repair import repair_overlong_speech_segments
 from dublaro.pipeline.transcribe import save_transcript, transcribe_audio
 from dublaro.pipeline.translate import translate_transcript
 from dublaro.schemas import Transcript
-
-DubbingProgressStep = Literal[
-    "extract_audio",
-    "transcribe",
-    "diarize",
-    "translate",
-    "adapt_text",
-    "dubbing_script",
-    "synthesize",
-    "repair_timing",
-    "fit_speech",
-    "fit_video",
-    "align_speech",
-    "separate_background",
-    "mix_original_audio",
-    "normalize_audio",
-    "export_video",
-    "export_srt",
-    "write_manifest",
-]
-
-DubbingProgressStatus = Literal["started", "finished", "failed", "skipped"]
-
-DubbingProgressCallback = Callable[
-    [DubbingProgressStep, DubbingProgressStatus, str],
-    None,
-]
-
-
-@dataclass(frozen=True)
-class DubRunContext:
-    paths: DubPaths
-    options: DubOptions
-    adapters: DubAdapters
-    artifact_paths: DubArtifactPaths
-    progress_callback: DubbingProgressCallback | None = None
-
-
-@dataclass(frozen=True)
-class TextWorkflowResult:
-    translated_transcript: Transcript
-    adapted_transcript: Transcript
-
-
-@dataclass(frozen=True)
-class SpeechTimingResult:
-    transcript: Transcript
-    fitted_transcript_path: Path | None = None
-    fitted_speech_dir: Path | None = None
-
-
-@dataclass(frozen=True)
-class TimingRepairResult:
-    transcript: Transcript
-    timing_repaired_transcript_path: Path | None = None
-    timing_repaired_speech_dir: Path | None = None
-
-
-@dataclass(frozen=True)
-class VideoFitResult:
-    transcript: Transcript
-    video_path: Path
-    slowdown_factor: float = 1.0
-    video_fitted_transcript_path: Path | None = None
-    fitted_video_path: Path | None = None
-
-
-@dataclass(frozen=True)
-class ExportAudioResult:
-    audio_path: Path
-    mix_original_audio_path: Path | None = None
-    mixed_audio_path: Path | None = None
-    video_fitted_original_audio_path: Path | None = None
-    separated_background_audio_path: Path | None = None
-    separated_voice_audio_path: Path | None = None
-    video_fitted_background_audio_path: Path | None = None
-
-
-@dataclass(frozen=True)
-class AudioNormalizationResult:
-    audio_path: Path
-    normalized_audio_path: Path | None = None
-
-
-@dataclass(frozen=True)
-class SubtitleExportResult:
-    sidecar_srt_path: Path | None = None
-    embedded_srt_path: Path | None = None
-
-
-@dataclass(frozen=True)
-class ManifestInputs:
-    started_at: datetime
-    extracted_audio_path: Path
-    source_transcript_path: Path
-    diarized_transcript_path: Path | None
-    translated_transcript_path: Path
-    adapted_transcript_path: Path
-    synthesized_transcript_path: Path
-    timing_repaired_transcript_path: Path | None
-    timing_repaired_speech_dir: Path | None
-    speech_dir: Path
-    speech_track_path: Path
-    dubbed_video_path: Path
-    fitted_transcript_path: Path | None
-    fitted_speech_dir: Path | None
-    video_fitted_transcript_path: Path | None
-    fitted_video_path: Path | None
-    video_fitted_original_audio_path: Path | None
-    separated_background_audio_path: Path | None
-    separated_voice_audio_path: Path | None
-    video_fitted_background_audio_path: Path | None
-    mix_original_audio_path: Path | None
-    mixed_audio_path: Path | None
-    normalized_audio_path: Path | None
-    srt_path: Path | None
-    embedded_srt_path: Path | None
-    source_transcript: Transcript
-    translated_transcript: Transcript
-    adapted_transcript: Transcript
-    synthesized_transcript: Transcript
-    speech_timeline_transcript: Transcript
-
-
-@contextmanager
-def _progress_stage(
-    callback: DubbingProgressCallback | None,
-    step: DubbingProgressStep,
-    message: str,
-) -> Iterator[None]:
-    if callback is None:
-        yield
-        return
-
-    callback(step, "started", message)
-
-    try:
-        yield
-    except Exception:
-        callback(step, "failed", message)
-        raise
-
-    callback(step, "finished", message)
-
-
-def _progress_skipped(
-    callback: DubbingProgressCallback | None,
-    step: DubbingProgressStep,
-    message: str,
-) -> None:
-    if callback is not None:
-        callback(step, "skipped", message)
 
 
 def _extract_audio(context: DubRunContext) -> Path:
