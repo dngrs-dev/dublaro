@@ -39,7 +39,7 @@ from dublaro.adapters.translation import (
 )
 from dublaro.adapters.tts import FakeTtsAdapter, PiperTtsAdapter, TtsAdapter
 from dublaro.cli_config import ResolvedVoiceProfileSettings
-from dublaro.pipeline.preflight import SpeakerVoicePreflightSettings
+from dublaro.pipeline.dub.preflight import SpeakerVoicePreflightSettings
 from dublaro.pipeline.voices import SpeakerVoice
 from dublaro.schemas import VoiceProfile
 

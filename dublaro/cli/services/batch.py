@@ -29,7 +29,7 @@ from dublaro.pipeline.batch import (
     format_video_extensions,
 )
 from dublaro.pipeline.dub import DubbingArtifacts, DubbingProgressCallback
-from dublaro.pipeline.preflight import DubPreflightReport
+from dublaro.pipeline.dub.preflight import DubPreflightReport
 
 BatchDubStatus = Literal["done", "planned", "failed"]
 

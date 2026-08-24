@@ -294,7 +294,7 @@ def test_batch_command_dry_run_continues_after_preflight_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dublaro.pipeline.preflight import DubPreflightReport, PreflightIssue
+    from dublaro.pipeline.dub.preflight import DubPreflightReport, PreflightIssue
 
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"

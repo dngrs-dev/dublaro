@@ -28,7 +28,7 @@ from dublaro.pipeline.dub import (
     dub_video,
 )
 from dublaro.pipeline.dub.options import BackgroundMode, TextWorkflowMode
-from dublaro.pipeline.preflight import (
+from dublaro.pipeline.dub.preflight import (
     DubPreflightReport,
     PreflightScope,
     validate_dub_preflight,

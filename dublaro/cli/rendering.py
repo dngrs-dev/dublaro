@@ -26,7 +26,7 @@ from dublaro.pipeline.dub import (
     DubbingProgressStatus,
     DubbingProgressStep,
 )
-from dublaro.pipeline.preflight import DubPreflightReport
+from dublaro.pipeline.dub.preflight import DubPreflightReport
 
 console = Console()
 

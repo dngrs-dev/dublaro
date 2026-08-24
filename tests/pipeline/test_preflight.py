@@ -4,17 +4,17 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-from dublaro.pipeline import preflight as preflight_module
-from dublaro.pipeline.preflight import (
+from dublaro.pipeline.dub.preflight import (
     PreflightScope,
     SpeakerVoicePreflightSettings,
     validate_dub_preflight,
 )
+from dublaro.pipeline.dub.preflight import checks as preflight_checks
 
 
 def stub_ffmpeg_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        preflight_module.shutil,
+        preflight_checks.shutil,
         "which",
         lambda executable: f"C:/tools/{executable}.exe",
     )
@@ -28,7 +28,7 @@ def stub_ffmpeg_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(preflight_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
 
 
 def test_dub_preflight_passes_for_fake_backends(
@@ -69,7 +69,7 @@ def test_dub_preflight_checks_demucs_when_separated_background(
 
         return None
 
-    monkeypatch.setattr(preflight_module.shutil, "which", fake_which)
+    monkeypatch.setattr(preflight_checks.shutil, "which", fake_which)
 
     def fake_run(
         args: list[str],
@@ -80,7 +80,7 @@ def test_dub_preflight_checks_demucs_when_separated_background(
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(preflight_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
 
     video_path = tmp_path / "input.mp4"
     output_path = tmp_path / "output.mp4"
@@ -181,7 +181,7 @@ def test_dub_preflight_checks_piper_inputs(
 
         return None
 
-    monkeypatch.setattr(preflight_module.shutil, "which", fake_which)
+    monkeypatch.setattr(preflight_checks.shutil, "which", fake_which)
 
     def fake_run(
         args: list[str],
@@ -192,7 +192,7 @@ def test_dub_preflight_checks_piper_inputs(
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(preflight_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
 
     video_path = tmp_path / "input.mp4"
     output_path = tmp_path / "output.mp4"
@@ -366,7 +366,7 @@ def test_dub_preflight_checks_ollama_model(
         return False
 
     monkeypatch.setattr(
-        preflight_module,
+        preflight_checks,
         "check_ollama_model_available",
         fake_check_ollama_model_available,
     )
@@ -414,7 +414,7 @@ def test_dub_preflight_checks_ollama_translation_model(
         return False
 
     monkeypatch.setattr(
-        preflight_module,
+        preflight_checks,
         "check_ollama_model_available",
         fake_check_ollama_model_available,
     )

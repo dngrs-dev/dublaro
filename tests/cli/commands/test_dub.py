@@ -270,7 +270,7 @@ def test_dub_command_stops_on_preflight_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dublaro.pipeline.preflight import DubPreflightReport, PreflightIssue
+    from dublaro.pipeline.dub.preflight import DubPreflightReport, PreflightIssue
 
     video_path = tmp_path / "video.mp4"
     output_path = tmp_path / "video.pl.dubbed.mp4"
