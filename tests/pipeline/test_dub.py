@@ -12,9 +12,9 @@ from dublaro.adapters.text_adapter import FakeTextAdapter
 from dublaro.adapters.translation import FakeTranslationAdapter
 from dublaro.adapters.tts import FakeTtsAdapter
 from dublaro.audio.wav import write_mono_pcm16_wav
-from dublaro.pipeline import dub_stages
 from dublaro.pipeline.dub import dub_video
 from dublaro.pipeline.dub.stages import audio as dub_audio_stages
+from dublaro.pipeline.dub.stages import export as dub_export_stages
 from dublaro.pipeline.dub.stages import speech as dub_speech_stages
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
 from dublaro.pipeline.voices import SpeakerVoice
@@ -129,7 +129,7 @@ def test_dub_video_runs_full_pipeline(
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -314,7 +314,9 @@ def test_dub_video_can_fit_speech_before_alignment(
         "fit_generated_speech_to_segments",
         fake_fit_generated_speech_to_segments,
     )
-    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        dub_export_stages, "export_dubbed_video", fake_export_dubbed_video
+    )
 
     artifacts = dub_video(
         video_path,
@@ -476,7 +478,9 @@ def test_dub_video_can_fit_video_after_capped_speech_fitting(
         fake_fit_generated_speech_to_segments,
     )
     monkeypatch.setattr(dub_speech_stages, "slow_video", fake_slow_video)
-    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        dub_export_stages, "export_dubbed_video", fake_export_dubbed_video
+    )
 
     artifacts = dub_video(
         video_path,
@@ -640,7 +644,7 @@ def test_dub_video_can_mix_original_audio_before_export(
         fake_mix_original_audio_with_dubbed_speech,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -802,7 +806,7 @@ def test_dub_video_can_normalize_final_audio_before_export(
         fake_normalize_audio_loudness,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -911,7 +915,7 @@ def test_dub_video_can_export_srt(
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -993,7 +997,9 @@ def test_dub_video_can_soft_embed_subtitles_without_sidecar_srt(
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
-    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        dub_export_stages, "export_dubbed_video", fake_export_dubbed_video
+    )
 
     artifacts = dub_video(
         video_path,
@@ -1072,7 +1078,7 @@ def test_dub_video_reports_progress(
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -1172,7 +1178,9 @@ def test_dub_video_writes_manifest_by_default(
     monkeypatch.setattr(
         dub_audio_stages, "extract_audio_from_video", fake_extract_audio_from_video
     )
-    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        dub_export_stages, "export_dubbed_video", fake_export_dubbed_video
+    )
 
     speaker_voices = {
         "speaker-1": SpeakerVoice(
@@ -1361,7 +1369,7 @@ def test_dub_video_resumes_intermediate_artifacts_but_regenerates_final_video(
         fail_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_export_stages,
         "export_dubbed_video",
         fake_export_dubbed_video,
     )
@@ -1451,7 +1459,9 @@ def test_dub_video_can_use_llm_dubbing_text_workflow(
         "extract_audio_from_video",
         fake_extract_audio_from_video,
     )
-    monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
+    monkeypatch.setattr(
+        dub_export_stages, "export_dubbed_video", fake_export_dubbed_video
+    )
 
     artifacts = dub_video(
         video_path,
@@ -1513,7 +1523,7 @@ def test_dub_video_can_start_from_adapted_checkpoint(
         return output_path
 
     monkeypatch.setattr(
-        "dublaro.pipeline.dub_stages.export_dubbed_video",
+        "dublaro.pipeline.dub.stages.export.export_dubbed_video",
         fake_export_video,
     )
 
