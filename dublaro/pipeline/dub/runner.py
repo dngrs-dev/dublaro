@@ -30,19 +30,21 @@ from dublaro.pipeline.dub.stages.audio import (
     _normalize_audio_for_export,
     _prepare_audio_for_export,
 )
-from dublaro.pipeline.dub_stages import (
+from dublaro.pipeline.dub.stages.text import (
     _adapt_translated_text,
-    _align_speech_track,
     _diarize_source_transcript,
+    _prepare_text_for_dubbing,
+    _transcribe_source_audio,
+    _translate_source_transcript,
+)
+from dublaro.pipeline.dub_stages import (
+    _align_speech_track,
     _export_video,
     _fit_speech_to_timing,
     _fit_video_to_speech,
     _prepare_subtitles_for_export,
-    _prepare_text_for_dubbing,
     _repair_speech_timing,
     _synthesize_speech,
-    _transcribe_source_audio,
-    _translate_source_transcript,
     _write_manifest,
 )
 from dublaro.pipeline.resume import load_reusable_transcript
