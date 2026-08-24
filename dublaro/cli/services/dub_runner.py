@@ -27,7 +27,7 @@ from dublaro.pipeline.dub import (
     DubbingProgressCallback,
     dub_video,
 )
-from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
+from dublaro.pipeline.dub.options import BackgroundMode, TextWorkflowMode
 from dublaro.pipeline.preflight import (
     DubPreflightReport,
     PreflightScope,

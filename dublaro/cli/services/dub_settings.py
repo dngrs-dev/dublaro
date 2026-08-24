@@ -9,7 +9,7 @@ from dublaro.cli_config import (
 )
 from dublaro.config import load_config
 from dublaro.pipeline.checkpoints import DubCheckpoint
-from dublaro.pipeline.dub_plan import BackgroundMode, TextWorkflowMode
+from dublaro.pipeline.dub.options import BackgroundMode, TextWorkflowMode
 from dublaro.pipeline.subtitles import SrtTextMode, SubtitleEmbedMode
 
 

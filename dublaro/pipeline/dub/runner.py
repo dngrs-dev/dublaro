@@ -11,7 +11,7 @@ from dublaro.adapters.text_adapter import TextAdapter
 from dublaro.adapters.translation import TranslationAdapter
 from dublaro.adapters.tts import TtsAdapter
 from dublaro.pipeline.checkpoints import DubCheckpoint
-from dublaro.pipeline.dub_plan import (
+from dublaro.pipeline.dub.options import (
     BackgroundMode,
     DubAdapters,
     DubOptions,

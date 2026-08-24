@@ -16,7 +16,7 @@ from dublaro.audio.ffmpeg import (
 from dublaro.pipeline.adapt_text import adapt_transcript_text
 from dublaro.pipeline.align import build_speech_timeline
 from dublaro.pipeline.diarize import diarize_transcript
-from dublaro.pipeline.dub_plan import (
+from dublaro.pipeline.dub.options import (
     DubAdapters,
     DubArtifactPaths,
     DubOptions,
