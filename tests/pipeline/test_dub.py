@@ -15,6 +15,7 @@ from dublaro.audio.wav import write_mono_pcm16_wav
 from dublaro.pipeline import dub_stages
 from dublaro.pipeline.dub import dub_video
 from dublaro.pipeline.dub.stages import audio as dub_audio_stages
+from dublaro.pipeline.dub.stages import speech as dub_speech_stages
 from dublaro.pipeline.transcribe import load_transcript, save_transcript
 from dublaro.pipeline.voices import SpeakerVoice
 from dublaro.schemas import Segment, Transcript, VoiceProfile
@@ -309,7 +310,7 @@ def test_dub_video_can_fit_speech_before_alignment(
         dub_audio_stages, "extract_audio_from_video", fake_extract_audio_from_video
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_speech_stages,
         "fit_generated_speech_to_segments",
         fake_fit_generated_speech_to_segments,
     )
@@ -470,11 +471,11 @@ def test_dub_video_can_fit_video_after_capped_speech_fitting(
         fake_extract_audio_from_video,
     )
     monkeypatch.setattr(
-        dub_stages,
+        dub_speech_stages,
         "fit_generated_speech_to_segments",
         fake_fit_generated_speech_to_segments,
     )
-    monkeypatch.setattr(dub_stages, "slow_video", fake_slow_video)
+    monkeypatch.setattr(dub_speech_stages, "slow_video", fake_slow_video)
     monkeypatch.setattr(dub_stages, "export_dubbed_video", fake_export_dubbed_video)
 
     artifacts = dub_video(
