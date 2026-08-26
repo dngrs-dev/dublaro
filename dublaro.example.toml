@@ -1,0 +1,163 @@
+# Example Dublaro config.
+#
+# Copy this file to dublaro.toml, then edit the local paths.
+# dublaro.toml is ignored by git because it usually contains local model paths.
+#
+# Relative paths below are resolved from the project root after copying.
+#
+# This config is intentionally beginner-friendly:
+# - one global Piper voice
+# - no diarization by default
+# - no source separation by default
+# - no LLM timing repair by default
+#
+# Enable advanced features after your first basic dub works.
+
+[dub]
+source_language = "en"
+target_language = "pl"
+
+output_dir = "data/output"
+workspace_dir = ".dublaro"
+
+# separate = translate first, then adapt text for dubbing
+# llm-dubbing = one LLM creates translated and adapted text
+text_workflow = "separate"
+
+# speech-only = dubbed speech only
+# original = full original audio under dubbed speech
+# ducked = lower original audio around dubbed speech
+# separated = use a separated background track
+background_mode = "ducked"
+
+preflight = true
+overwrite = false
+resume = false
+ffmpeg_executable = "ffmpeg"
+
+asr_sample_rate = 16000
+
+# Optional. If omitted, Dublaro can detect Piper sample rate from .onnx.json.
+# speech_sample_rate = 22050
+
+[dub.asr]
+backend = "faster-whisper"
+model_size = "small"
+device = "cpu"
+compute_type = "int8"
+
+[dub.diarization]
+enabled = false
+backend = "fake"
+
+# Enable this after the basic dub works and you want speaker detection.
+# Requires: python -m pip install -e ".[diarization]"
+#
+# [dub.diarization]
+# enabled = true
+# backend = "pyannote"
+# model_id = "pyannote/speaker-diarization-community-1"
+# device = "cpu"
+# token_env_var = "HF_TOKEN"
+# min_speakers = 1
+# max_speakers = 4
+
+[dub.translation]
+backend = "argos"
+install_package = false
+group_segments = true
+max_group_pause_seconds = 0.8
+max_group_duration_seconds = 12.0
+max_sentence_group_duration_seconds = 18.0
+
+# Use this only when backend = "ollama".
+ollama_model = "llama3.1"
+ollama_url = "http://localhost:11434"
+ollama_timeout_seconds = 120.0
+ollama_temperature = 0.2
+
+[dub.text_adapter]
+backend = "rules"
+
+# Enable this for LLM-based text adaptation.
+#
+# [dub.text_adapter]
+# backend = "ollama"
+# ollama_model = "llama3.1"
+# ollama_url = "http://localhost:11434"
+# ollama_timeout_seconds = 120.0
+# ollama_temperature = 0.2
+
+[dub.tts]
+backend = "piper"
+piper_model_path = "models/piper/pl_PL-voice.onnx"
+piper_config_path = "models/piper/pl_PL-voice.onnx.json"
+piper_executable = "piper"
+
+[dub.timing_repair]
+enabled = false
+max_attempts = 2
+target_speedup = 1.15
+
+[dub.fit_speech]
+enabled = true
+max_speedup = 1.35
+min_overrun_seconds = 0.05
+
+[dub.fit_video]
+enabled = false
+max_slowdown = 1.2
+
+[dub.source_separation]
+backend = "fake"
+
+# Enable this after installing source-separation extras and switching
+# dub.background_mode to "separated".
+# Requires: python -m pip install -e ".[source-separation]"
+#
+# [dub.source_separation]
+# backend = "demucs"
+# demucs_executable = "demucs"
+# demucs_model = "htdemucs"
+# demucs_device = "cpu"
+
+[dub.mix]
+enabled = true
+original_audio_gain = 0.25
+ducking_gain = 0.08
+speech_gain = 1.0
+ducking_margin_seconds = 0.15
+ducking_fade_seconds = 0.05
+
+[dub.audio_normalization]
+normalize_final_audio = true
+target_final_lufs = -18.0
+final_true_peak = -1.5
+final_loudness_range = 11.0
+
+[dub.srt]
+export = true
+text_mode = "adapted"
+embed = "none"
+
+[dub.manifest]
+write = true
+
+# Optional per-speaker voice routing.
+# Enable after diarization works and you know the speaker IDs.
+#
+# [voices."SPEAKER_00"]
+# display_name = "Speaker 1"
+# language = "pl"
+# tts_backend = "piper"
+# piper_model_path = "models/piper/pl_PL-speaker-1.onnx"
+# piper_config_path = "models/piper/pl_PL-speaker-1.onnx.json"
+# piper_executable = "piper"
+#
+# [voices."SPEAKER_01"]
+# display_name = "Speaker 2"
+# language = "pl"
+# tts_backend = "piper"
+# piper_model_path = "models/piper/pl_PL-speaker-2.onnx"
+# piper_config_path = "models/piper/pl_PL-speaker-2.onnx.json"
+# piper_executable = "piper"
