@@ -23,6 +23,7 @@ asr = ["faster-whisper>=1.0"]
 diarization = ["pyannote.audio>=4.0"]
 translation = ["argostranslate>=1.9"]
 source-separation = ["demucs>=4.0"]
+dev = ["build>=1.2", "pytest>=9.0", "ruff>=0.8"]
 
 [project.urls]
 Homepage = "https://github.com/dngrs-dev/dublaro"
