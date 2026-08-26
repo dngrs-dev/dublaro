@@ -14,6 +14,9 @@ from dublaro.cli.reports.preview import (
     format_optional_factor,
     format_optional_seconds,
 )
+from dublaro.cli.reports.quality import (
+    DubQualityReport,
+)
 from dublaro.cli.reports.workspace import WorkspaceInspectionReport
 from dublaro.cli.services.batch import BatchDubJob, BatchDubResult
 from dublaro.cli_config import ResolvedDubSettings
@@ -125,6 +128,160 @@ def print_workspace_inspection_report(report: WorkspaceInspectionReport) -> None
         )
 
     console.print(table)
+
+
+def print_dub_quality_report(report: DubQualityReport) -> None:
+    console.print(f"[green]Quality report:[/green] {report.workspace.workspace_dir}")
+    console.print(
+        "[green]Artifacts:[/green] "
+        f"{report.workspace.present_count} present, "
+        f"{report.workspace.missing_count} missing, "
+        f"{len(report.workspace.manifest_paths)} manifest file(s)"
+    )
+
+    if report.manifest is not None:
+        _print_quality_manifest_summary(report)
+    else:
+        console.print("[yellow]Manifest:[/yellow] not found")
+
+    _print_quality_timing_summary(report)
+    _print_quality_repair_summary(report)
+    _print_quality_messages(report)
+
+
+def _print_quality_manifest_summary(report: DubQualityReport) -> None:
+    manifest = report.manifest
+    if manifest is None:
+        return
+
+    console.print(f"[green]Manifest:[/green] {manifest.path}")
+
+    language = " -> ".join(
+        part for part in (manifest.source_language, manifest.target_language) if part
+    )
+    if language:
+        console.print(f"[green]Language:[/green] {language}")
+
+    if manifest.adapters:
+        adapter_text = ", ".join(
+            f"{name}={adapter}" for name, adapter in manifest.adapters.items()
+        )
+        console.print(f"[green]Adapters:[/green] {adapter_text}")
+
+    option_names = (
+        "text_workflow",
+        "background_mode",
+        "repair_timing",
+        "fit_speech",
+        "fit_video",
+        "subtitle_embed",
+        "normalize_final_audio",
+    )
+    options = [
+        f"{name}={manifest.options[name]}"
+        for name in option_names
+        if name in manifest.options
+    ]
+
+    if options:
+        console.print(f"[green]Options:[/green] {', '.join(options)}")
+
+    if manifest.speaker_voice_count:
+        console.print(
+            f"[green]Speaker voices:[/green] {manifest.speaker_voice_count} configured"
+        )
+
+
+def _print_quality_timing_summary(report: DubQualityReport) -> None:
+    if report.timing is None:
+        console.print("[yellow]Timing:[/yellow] unavailable")
+        return
+
+    timing = report.timing
+    console.print(
+        "[green]Timing:[/green] "
+        f"{len(timing.previews)} segments, "
+        f"{timing.attention_count} need attention, "
+        f"{timing.video_fit_count} need video fitting "
+        f"(max speed-up {report.max_speedup:.2f}x)"
+    )
+
+    issues = [preview for preview in timing.previews if preview.status != "ok"]
+    if not issues:
+        return
+
+    table = Table(title="Timing Issues")
+    table.add_column("Segment", no_wrap=True)
+    table.add_column("Target", justify="right", no_wrap=True)
+    table.add_column("Audio", justify="right", no_wrap=True)
+    table.add_column("Required", justify="right", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+
+    for preview in issues[:10]:
+        table.add_row(
+            preview.segment_id,
+            format_optional_seconds(preview.target_duration),
+            format_optional_seconds(preview.audio_duration),
+            format_optional_factor(preview.required_speedup),
+            preview.status,
+        )
+
+    console.print(table)
+
+
+def _print_quality_repair_summary(report: DubQualityReport) -> None:
+    if report.repairs is None:
+        console.print("[yellow]Repairs:[/yellow] no timing repair transcript found")
+        return
+
+    repairs = report.repairs
+    console.print(
+        "[green]Repairs:[/green] "
+        f"{repairs.attempted_count} attempted, "
+        f"{repairs.repaired_count} repaired, "
+        f"{repairs.improved_count} improved, "
+        f"{repairs.not_improved_count} not improved"
+    )
+
+    rows = [row for row in repairs.rows if row.status != "not_attempted"]
+    if not rows:
+        return
+
+    table = Table(title="Timing Repair Decisions")
+    table.add_column("Segment", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Attempts", justify="right", no_wrap=True)
+    table.add_column("Audio", no_wrap=True)
+    table.add_column("Speed-up", no_wrap=True)
+    table.add_column("Reason", overflow="fold", ratio=3)
+
+    for row in rows[:10]:
+        table.add_row(
+            row.segment_id,
+            row.status,
+            _format_repair_optional_int(row.attempts),
+            _format_repair_change(
+                row.audio_duration_before_seconds,
+                row.audio_duration_after_seconds,
+                format_optional_seconds,
+            ),
+            _format_repair_change(
+                row.required_speedup_before,
+                row.required_speedup_after,
+                format_optional_factor,
+            ),
+            row.reason,
+        )
+
+    console.print(table)
+
+
+def _print_quality_messages(report: DubQualityReport) -> None:
+    for warning in report.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
+
+    for error in report.errors:
+        console.print(f"[red]Error:[/red] {error}")
 
 
 def _format_workspace_artifact_path(workspace_dir: Path, path: Path) -> str:

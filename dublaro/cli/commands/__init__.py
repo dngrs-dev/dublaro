@@ -18,6 +18,7 @@ from dublaro.cli.commands.preview_speakers import preview_speakers
 from dublaro.cli.commands.preview_timing import preview_timing
 from dublaro.cli.commands.preview_units import preview_units
 from dublaro.cli.commands.preview_voices import preview_voices
+from dublaro.cli.commands.report import report
 from dublaro.cli.commands.separate_audio import separate_audio
 from dublaro.cli.commands.synthesize import synthesize
 from dublaro.cli.commands.transcribe import transcribe
@@ -45,6 +46,7 @@ def register_commands(app: typer.Typer) -> None:
     app.command("preview-timing")(preview_timing)
     app.command("preview-units")(preview_units)
     app.command("preview-voices")(preview_voices)
+    app.command("report")(report)
     app.command("separate-audio")(separate_audio)
     app.command("synthesize")(synthesize)
     app.command("transcribe")(transcribe)
