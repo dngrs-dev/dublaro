@@ -97,6 +97,7 @@ For speaker diarization, source separation, and LLM timing repair, install and e
 - [Architecture](docs/architecture.md)
 - [Development](docs/development.md)
 - [Example Config](dublaro.example.toml)
+- [Example Recipes](examples/README.md)
 
 ## Core Pipeline
 

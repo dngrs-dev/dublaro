@@ -1,0 +1,44 @@
+[dub]
+source_language = "en"
+target_language = "pl"
+workspace_root = ".dublaro"
+output_dir = "data/output"
+export_srt = true
+subtitle_embed = "soft"
+background_mode = "ducked"
+text_workflow = "llm-dubbing"
+repair_timing = true
+
+[dub.asr]
+backend = "faster-whisper"
+model = "small"
+
+[dub.diarization]
+backend = "pyannote"
+
+[dub.dubbing_script]
+backend = "ollama"
+model = "llama3.1"
+url = "http://localhost:11434"
+timeout_seconds = 120
+
+[dub.text_adapter]
+backend = "ollama"
+model = "llama3.1"
+url = "http://localhost:11434"
+timeout_seconds = 120
+
+[dub.tts]
+backend = "piper"
+piper_executable = "piper"
+piper_model_path = "models/piper/pl_PL-example.onnx"
+
+[voices."SPEAKER_00"]
+display_name = "Speaker 1"
+tts_backend = "piper"
+piper_model_path = "models/piper/pl_PL-speaker-1.onnx"
+
+[voices."SPEAKER_01"]
+display_name = "Speaker 2"
+tts_backend = "piper"
+piper_model_path = "models/piper/pl_PL-speaker-2.onnx"

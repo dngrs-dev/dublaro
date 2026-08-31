@@ -1,0 +1,24 @@
+[dub]
+source_language = "en"
+target_language = "pl"
+workspace_root = ".dublaro"
+output_dir = "data/output"
+export_srt = true
+subtitle_embed = "none"
+background_mode = "ducked"
+resume = true
+
+[dub.asr]
+backend = "faster-whisper"
+model = "small"
+
+[dub.translation]
+backend = "argos"
+
+[dub.text_adapter]
+backend = "simple"
+
+[dub.tts]
+backend = "piper"
+piper_executable = "piper"
+piper_model_path = "models/piper/pl_PL-example.onnx"

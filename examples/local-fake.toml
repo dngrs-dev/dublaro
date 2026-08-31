@@ -1,0 +1,19 @@
+[dub]
+source_language = "en"
+target_language = "pl"
+workspace_root = ".dublaro"
+export_srt = true
+subtitle_embed = "none"
+background_mode = "original"
+
+[dub.asr]
+backend = "fake"
+
+[dub.translation]
+backend = "fake"
+
+[dub.text_adapter]
+backend = "fake"
+
+[dub.tts]
+backend = "fake"
